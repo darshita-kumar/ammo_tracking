@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'db_helper.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -323,9 +327,12 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
         minimumSize: const Size(160, 60),
       ),
       onPressed: () {
-        setState(() {
-          ammoCounts[label] = ammoCounts[label]! + 1;
-        });
+        sendAmmoEvent(
+          troop: widget.troop,
+          gun: widget.gun,
+          ammo: "SMK",
+        );
+
       },
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
