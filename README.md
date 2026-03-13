@@ -15,3 +15,7 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+
+## Note:
+Setup your firebase project using these instructions: [documentation](https://firebase.google.com/docs/flutter/setup?platform=android)
+Create a project in firebase. Go to Build > Firestore database > Create a db > Add google-services.json to android/app/build.gradle.kts
