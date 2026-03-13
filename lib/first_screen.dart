@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'gun_selection.dart';
-import 'final_screen.dart';
+import 'troop_leader_dashboard.dart';
 
 class FirstScreen extends StatefulWidget {
   const FirstScreen({super.key});
@@ -95,7 +95,6 @@ class _FirstScreenState extends State<FirstScreen> {
               ),
               onPressed: isFormValid
               ? () {
-
                   if (selectedPosition == "Gun") {
                     Navigator.push(
                       context,
@@ -110,10 +109,9 @@ class _FirstScreenState extends State<FirstScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => FinalScreen(
+                        builder: (_) => TroopLeaderDashboard(
                           position: selectedPosition!,
                           troop: selectedTroop!,
-                          gun: null,
                         ),
                       ),
                     );
