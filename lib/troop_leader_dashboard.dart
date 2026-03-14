@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TroopLeaderDashboard extends StatefulWidget {
 
@@ -16,6 +19,9 @@ class TroopLeaderDashboard extends StatefulWidget {
 }
 
 class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
+
+  Timestamp? sessionStart;
+  StreamSubscription? eventSubscription;
 
   final ammoTypes = [
     "HE Plugged",
@@ -52,14 +58,77 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
     }
   }
 
-  Widget cell(String text,
-      {bool bold=false, double width=110}) {
+  void startPressed() {
+    setState(() {
+      started = true;
+      sessionStart = Timestamp.now();
+      for (var ammo in ammoTypes) {
+        for (var gun in gunRows) {
+          guns[gun]![ammo] = initial[ammo]!;
+        }
+      }
 
+    });
+    startListeningToEvents();
+  }
+
+  bool isThresholdReached(String gun, String ammo) {
+    return guns[gun]![ammo]! <= threshold[ammo]!;
+  }
+
+  void startListeningToEvents() {
+    eventSubscription = FirebaseFirestore.instance
+        .collection("events")
+        .where("troop", isEqualTo: widget.troop)
+        .where("timestamp", isGreaterThan: sessionStart)
+        .snapshots()
+        .listen((snapshot) {
+
+      for (var change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          final data = change.doc.data()!;
+          String gun = data["gun"];
+          String ammo = data["ammo"];
+          setState(() {
+            /// 1️⃣ Only update if value > 0
+            if (guns[gun]![ammo]! > 0) {
+              guns[gun]![ammo] = guns[gun]![ammo]! - 1;
+            }
+            /// 2️⃣ Update CART logic
+            if (ammo != "SUPERCART") {
+              if (guns[gun]!["CART"]! > 0) {
+                guns[gun]!["CART"] = guns[gun]!["CART"]! - 1;
+              }
+            } else {
+              guns[gun]!["CART"] =
+                  guns[gun]!["CART"]! + 1;
+            }
+          });
+
+        }
+
+      }
+
+    });
+  }
+
+  // Dispose the listener
+  @override
+  void dispose() {
+    eventSubscription?.cancel();
+    super.dispose();
+  }
+
+  //====================== FRONTEND ==============================
+
+  Widget cell(String text,
+      {bool bold=false, double width=110, Color? color}) {
     return Container(
       width: width,
       height: 60,
       alignment: Alignment.center,
       decoration: BoxDecoration(
+        color: color,
         border: Border.all(color: Colors.black),
       ),
       child: Text(
@@ -73,7 +142,6 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   }
 
   Widget inputCell(String ammo, Map<String,int> map) {
-
     return Container(
       width: 110,
       height: 60,
@@ -95,21 +163,6 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
     );
   }
 
-  void startPressed() {
-
-    setState(() {
-
-      started = true;
-
-      for (var ammo in ammoTypes) {
-        for (var gun in gunRows) {
-          guns[gun]![ammo] = initial[ammo]!;
-        }
-      }
-
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
 
@@ -123,15 +176,12 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
       body: SafeArea(
         child: Column(
           children: [
-
             Expanded(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: SingleChildScrollView(
                   child: Column(
-
                     children: [
-
                       /// HEADER
                       Row(
                         children: [
@@ -159,10 +209,19 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
                       /// GUN ROWS
                       ...gunRows.map((g) => Row(
                         children: [
+                          /// Gun name column
                           cell(g, bold:true, width:150),
-                          ...ammoTypes.map(
-                            (a)=>cell(guns[g]![a].toString())
-                          )
+                          /// Ammo cells
+                          ...ammoTypes.map((a) {
+                            Color? highlight;
+                            if (started && guns[g]![a]! <= threshold[a]!) {
+                              highlight = Colors.red.shade200;
+                            }
+                            return cell(
+                              guns[g]![a].toString(),
+                              color: highlight,
+                            );
+                          })
                         ],
                       ))
 

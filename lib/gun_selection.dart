@@ -61,9 +61,9 @@ class _GunSelectionScreenState extends State<GunSelectionScreen> {
 
             const SizedBox(height: 40),
 
-            gunButton("Gun 1"),
-            gunButton("Gun 2"),
-            gunButton("Gun 3"),
+            gunButton("Gun1"),
+            gunButton("Gun2"),
+            gunButton("Gun3"),
 
             const SizedBox(height: 80),
 
