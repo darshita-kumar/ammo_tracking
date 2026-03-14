@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
 
 class TroopLeaderDashboard extends StatefulWidget {
 
@@ -141,6 +142,45 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
     );
   }
 
+  Widget editableCell(String gun, String ammo) {
+    int value = guns[gun]![ammo]!;
+    Color? highlight;
+    if (started && value <= threshold[ammo]!) {
+      highlight = Colors.red.shade200;
+    }
+
+    return Container(
+      width: 110,
+      height: 60,
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: highlight,
+        border: Border.all(color: Colors.black),
+      ),
+      child: TextField(
+        enabled: started,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        controller: TextEditingController(text: value.toString()),
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+        ],
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+        ),
+        onSubmitted: (val) {
+          int? newVal = int.tryParse(val);
+
+          if (newVal != null) {
+            setState(() {
+              guns[gun]![ammo] = newVal;
+            });
+          }
+        },
+      ),
+    );
+  }
+
   Widget inputCell(String ammo, Map<String,int> map) {
     return Container(
       width: 110,
@@ -210,18 +250,9 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
                       ...gunRows.map((g) => Row(
                         children: [
                           /// Gun name column
-                          cell(g, bold:true, width:150),
-                          /// Ammo cells
-                          ...ammoTypes.map((a) {
-                            Color? highlight;
-                            if (started && guns[g]![a]! <= threshold[a]!) {
-                              highlight = Colors.red.shade200;
-                            }
-                            return cell(
-                              guns[g]![a].toString(),
-                              color: highlight,
-                            );
-                          })
+                          cell(g, bold: true, width: 150),
+                          /// Editable ammo cells
+                          ...ammoTypes.map((a) => editableCell(g, a)),
                         ],
                       ))
 
