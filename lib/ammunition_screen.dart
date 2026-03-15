@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'db_helper.dart';
+import 'constants.dart';
 
 class AmmunitionScreen extends StatefulWidget {
 
@@ -21,24 +22,24 @@ class AmmunitionScreen extends StatefulWidget {
 class _AmmunitionScreenState extends State<AmmunitionScreen> {
 
   Map<String, int> ammoCounts = {
-    "HE PLUGGED": 0,
-    "AB": 0,
-    "SMK": 0,
-    "HE 117": 0,
-    "ILL": 0,
-    "SUPERCART": 0,
+    Constants.HE_PLUGGED: 0,
+    Constants.AB: 0,
+    Constants.SMK: 0,
+    Constants.HE_117: 0,
+    Constants.ILL: 0,
+    Constants.SUPERCART: 0,
   };
 
   Color getAmmoColor(String ammo) {
     switch (ammo) {
-      case "HE PLUGGED":
-      case "HE 117":
+      case Constants.HE_PLUGGED:
+      case Constants.HE_117:
         return Colors.amber;   
-      case "ILL":
+      case Constants.ILL:
         return Colors.white;
-      case "SMK":
+      case Constants.SMK:
         return Colors.green;
-      case "SUPERCART":
+      case Constants.SUPERCART:
         return Colors.brown;
       default:
         return Colors.grey;
@@ -174,8 +175,8 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ammoButton("HE PLUGGED"),
-                ammoButton("HE 117"),
+                ammoButton(Constants.HE_PLUGGED),
+                ammoButton(Constants.HE_117),
               ],
             ),
 
@@ -183,8 +184,8 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ammoButton("AB"),
-                ammoButton("ILL"),
+                ammoButton(Constants.AB),
+                ammoButton(Constants.ILL),
               ],
             ),
 
@@ -192,8 +193,8 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ammoButton("SMK"),
-                ammoButton("SUPERCART"),
+                ammoButton(Constants.SMK),
+                ammoButton(Constants.SUPERCART),
               ],
             ),
 

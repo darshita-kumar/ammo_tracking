@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
+import 'constants.dart';
 
 class TroopLeaderDashboard extends StatefulWidget {
 
@@ -25,13 +26,13 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   StreamSubscription? eventSubscription;
 
   final ammoTypes = [
-    "HE PLUGGED",
-    "HE 117",
-    "AB",
-    "ILL",
-    "SMK",
-    "SUPERCART",
-    "CART"
+    Constants.HE_PLUGGED,
+    Constants.HE_117,
+    Constants.AB,
+    Constants.ILL,
+    Constants.SMK,
+    Constants.SUPERCART,
+    Constants.CART
   ];
 
   final gunRows = ["Gun1", "Gun2", "Gun3"];
@@ -96,13 +97,13 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
               guns[gun]![ammo] = guns[gun]![ammo]! - 1;
             }
             /// 2️⃣ Update CART logic
-            if (ammo != "SUPERCART") {
-              if (guns[gun]!["CART"]! > 0) {
-                guns[gun]!["CART"] = guns[gun]!["CART"]! - 1;
+            if (ammo != Constants.SUPERCART) {
+              if (guns[gun]![Constants.CART]! > 0) {
+                guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! - 1;
               }
             } else {
-              guns[gun]!["CART"] =
-                  guns[gun]!["CART"]! + 1;
+              guns[gun]![Constants.CART] =
+                  guns[gun]![Constants.CART]! + 1;
             }
           });
 
