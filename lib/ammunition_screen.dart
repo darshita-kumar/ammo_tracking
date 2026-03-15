@@ -29,33 +29,71 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
     "SUPERCART": 0,
   };
 
+  Color getAmmoColor(String ammo) {
+    switch (ammo) {
+      case "HE PLUGGED":
+      case "HE 117":
+        return Colors.amber;   
+      case "ILL":
+        return Colors.white;
+      case "SMK":
+        return Colors.green;
+      case "SUPERCART":
+        return Colors.brown;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Set<String> flashingButtons = {};
+
   Widget ammoButton(String label) {
+    bool isFlashing = flashingButtons.contains(label);
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.amber[200],
+        backgroundColor: isFlashing
+            ? getAmmoColor(label).withValues(alpha: 0.4)
+            : getAmmoColor(label),
+        side: const BorderSide(color: Colors.black),
         minimumSize: const Size(160, 60),
       ),
-      onPressed: () {
+      onPressed: () async {
+        /// Trigger flash
         setState(() {
+          flashingButtons.add(label);
           ammoCounts[label] = ammoCounts[label]! + 1;
         });
+
+        /// Send event
         sendAmmoEvent(
           troop: widget.troop,
           gun: widget.gun,
           ammo: label,
         );
 
+        /// Reset flash after 150ms
+        await Future.delayed(const Duration(milliseconds: 150));
+
+        setState(() {
+          flashingButtons.remove(label);
+        });
       },
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 16, color: Colors.black),
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.black,
+            ),
           ),
           Text(
             ammoCounts[label].toString(),
-            style: const TextStyle(fontSize: 18, color: Colors.black),
+            style: const TextStyle(
+              fontSize: 18,
+              color: Colors.black,
+            ),
           ),
         ],
       ),

@@ -25,10 +25,10 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   StreamSubscription? eventSubscription;
 
   final ammoTypes = [
-    "HE Plugged",
+    "HE PLUGGED",
     "HE 117",
     "AB",
-    "IPP",
+    "ILL",
     "SMK",
     "SUPERCART",
     "CART"
@@ -207,7 +207,6 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   Widget build(BuildContext context) {
 
     return Scaffold(
-
       appBar: AppBar(
         title: Text("Troop ${widget.troop} Dashboard"),
         centerTitle: true,
@@ -216,47 +215,56 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
       body: SafeArea(
         child: Column(
           children: [
+
+            /// DASHBOARD AREA
             Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
+              child: Center(
                 child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      /// HEADER
-                      Row(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 900),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          cell("Gun Platform", bold:true, width:150),
-                          ...ammoTypes.map((a)=>cell(a,bold:true))
+
+                          /// HEADER
+                          Row(
+                            children: [
+                              cell("Gun Platform", bold: true, width: 150),
+                              ...ammoTypes.map((a) => cell(a, bold: true)),
+                            ],
+                          ),
+
+                          /// INITIAL
+                          Row(
+                            children: [
+                              cell("Initial", bold: true, width: 150),
+                              ...ammoTypes.map((a) => inputCell(a, initial)),
+                            ],
+                          ),
+
+                          /// THRESHOLD
+                          Row(
+                            children: [
+                              cell("Threshold", bold: true, width: 150),
+                              ...ammoTypes.map((a) => inputCell(a, threshold)),
+                            ],
+                          ),
+
+                          /// GUN ROWS
+                          ...gunRows.map(
+                            (g) => Row(
+                              children: [
+                                cell(g, bold: true, width: 150),
+                                ...ammoTypes.map((a) => editableCell(g, a)),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
-
-                      /// INITIAL
-                      Row(
-                        children: [
-                          cell("Initial", bold:true, width:150),
-                          ...ammoTypes.map((a)=>inputCell(a, initial))
-                        ],
-                      ),
-
-                      /// THRESHOLD
-                      Row(
-                        children: [
-                          cell("Threshold", bold:true, width:150),
-                          ...ammoTypes.map((a)=>inputCell(a, threshold))
-                        ],
-                      ),
-
-                      /// GUN ROWS
-                      ...gunRows.map((g) => Row(
-                        children: [
-                          /// Gun name column
-                          cell(g, bold: true, width: 150),
-                          /// Editable ammo cells
-                          ...ammoTypes.map((a) => editableCell(g, a)),
-                        ],
-                      ))
-
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -264,13 +272,15 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
 
             const SizedBox(height: 20),
 
+            /// START BUTTON
             SizedBox(
               width: 220,
               height: 60,
               child: ElevatedButton(
-                onPressed: startPressed,
+                onPressed: started ? null : startPressed,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[300],
+                  backgroundColor:
+                      started ? Colors.grey : Colors.green.shade300,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),

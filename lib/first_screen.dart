@@ -73,7 +73,7 @@ class _FirstScreenState extends State<FirstScreen> {
             DropdownButton<String>(
               hint: const Text("SELECT"),
               value: selectedTroop,
-              items: ["A", "B", "C"].map((troop) {
+              items: ["A", "B", "C","D","E","F"].map((troop) {
                 return DropdownMenuItem(
                   value: troop,
                   child: Text(troop),
