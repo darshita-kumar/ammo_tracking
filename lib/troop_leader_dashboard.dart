@@ -35,7 +35,7 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
     Constants.CART
   ];
 
-  final gunRows = ["Gun1", "Gun2", "Gun3"];
+  final gunRows = [Constants.GUN1, Constants.GUN2, Constants.GUN3];
 
   Map<String,int> initial = {};
   Map<String,int> threshold = {};

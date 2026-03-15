@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'ammunition_screen.dart';
+import 'constants.dart';
 
 class GunSelectionScreen extends StatefulWidget {
 
@@ -61,9 +62,9 @@ class _GunSelectionScreenState extends State<GunSelectionScreen> {
 
             const SizedBox(height: 40),
 
-            gunButton("Gun1"),
-            gunButton("Gun2"),
-            gunButton("Gun3"),
+            gunButton(Constants.GUN1),
+            gunButton(Constants.GUN2),
+            gunButton(Constants.GUN3),
 
             const SizedBox(height: 80),
 
