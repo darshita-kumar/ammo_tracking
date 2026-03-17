@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'constants.dart';
 
 class TroopLeaderDashboard extends StatefulWidget {
-
   final String position;
   final String troop;
 
@@ -21,7 +20,6 @@ class TroopLeaderDashboard extends StatefulWidget {
 }
 
 class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
-
   Timestamp? sessionStart;
   StreamSubscription? eventSubscription;
 
@@ -37,9 +35,12 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
 
   final gunRows = [Constants.GUN1, Constants.GUN2, Constants.GUN3];
 
-  Map<String,int> initial = {};
-  Map<String,int> threshold = {};
-  Map<String,Map<String,int>> guns = {};
+  Map<String, int> initial = {};
+  Map<String, int> threshold = {};
+  Map<String, Map<String, int>> guns = {};
+
+  // Tracks which cells are currently flashing
+  Set<String> flashingCells = {};
 
   bool started = false;
 
@@ -69,13 +70,17 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
           guns[gun]![ammo] = initial[ammo]!;
         }
       }
-
     });
     startListeningToEvents();
   }
 
-  bool isThresholdReached(String gun, String ammo) {
-    return guns[gun]![ammo]! <= threshold[ammo]!;
+  /// Triggers a short flash highlight on a specific cell
+  void flashCell(String gun, String ammo) {
+    final key = '$gun|$ammo';
+    setState(() => flashingCells.add(key));
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) setState(() => flashingCells.remove(key));
+    });
   }
 
   void startListeningToEvents() {
@@ -85,36 +90,34 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
         .where("timestamp", isGreaterThan: sessionStart)
         .snapshots()
         .listen((snapshot) {
-
       for (var change in snapshot.docChanges) {
         if (change.type == DocumentChangeType.added) {
           final data = change.doc.data()!;
           String gun = data["gun"];
           String ammo = data["ammo"];
+
           setState(() {
-            /// 1️⃣ Only update if value > 0
             if (guns[gun]![ammo]! > 0) {
               guns[gun]![ammo] = guns[gun]![ammo]! - 1;
             }
-            /// 2️⃣ Update CART logic
+
             if (ammo != Constants.SUPERCART) {
               if (guns[gun]![Constants.CART]! > 0) {
                 guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! - 1;
               }
             } else {
-              guns[gun]![Constants.CART] =
-                  guns[gun]![Constants.CART]! + 1;
+              guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! + 1;
             }
           });
 
+          // Flash the updated cells
+          flashCell(gun, ammo);
+          flashCell(gun, Constants.CART);
         }
-
       }
-
     });
   }
 
-  // Dispose the listener
   @override
   void dispose() {
     eventSubscription?.cancel();
@@ -123,8 +126,7 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
 
   //====================== FRONTEND ==============================
 
-  Widget cell(String text,
-      {bool bold=false, double width=110, Color? color}) {
+  Widget cell(String text, {bool bold = false, double width = 110, Color? color}) {
     return Container(
       width: width,
       height: 60,
@@ -145,12 +147,17 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
 
   Widget editableCell(String gun, String ammo) {
     int value = guns[gun]![ammo]!;
+    final isFlashing = flashingCells.contains('$gun|$ammo');
+
     Color? highlight;
-    if (started && value <= threshold[ammo]!) {
-      highlight = Colors.red.shade200;
+    if (isFlashing) {
+      highlight = Colors.yellow.shade200;      // flash on DB update
+    } else if (started && value <= threshold[ammo]!) {
+      highlight = Colors.red.shade200;       // threshold warning
     }
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
       width: 110,
       height: 60,
       padding: const EdgeInsets.all(6),
@@ -163,26 +170,17 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
         keyboardType: TextInputType.number,
         textAlign: TextAlign.center,
         controller: TextEditingController(text: value.toString()),
-        inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-        ],
-        decoration: const InputDecoration(
-          border: InputBorder.none,
-        ),
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: const InputDecoration(border: InputBorder.none),
         onSubmitted: (val) {
           int? newVal = int.tryParse(val);
-
-          if (newVal != null) {
-            setState(() {
-              guns[gun]![ammo] = newVal;
-            });
-          }
+          if (newVal != null) setState(() => guns[gun]![ammo] = newVal);
         },
       ),
     );
   }
 
-  Widget inputCell(String ammo, Map<String,int> map) {
+  Widget inputCell(String ammo, Map<String, int> map) {
     return Container(
       width: 110,
       height: 60,
@@ -194,10 +192,8 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
         enabled: !started,
         keyboardType: TextInputType.number,
         decoration: const InputDecoration(border: OutlineInputBorder()),
-        controller: TextEditingController(
-          text: map[ammo].toString(),
-        ),
-        onChanged: (v){
+        controller: TextEditingController(text: map[ammo].toString()),
+        onChanged: (v) {
           map[ammo] = int.tryParse(v) ?? 0;
         },
       ),
@@ -206,18 +202,14 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       appBar: AppBar(
         title: Text("Troop ${widget.troop} Dashboard"),
         centerTitle: true,
       ),
-
       body: SafeArea(
         child: Column(
           children: [
-
-            /// DASHBOARD AREA
             Expanded(
               child: Center(
                 child: SingleChildScrollView(
@@ -229,32 +221,24 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-
-                          /// HEADER
                           Row(
                             children: [
                               cell("Gun Platform", bold: true, width: 150),
                               ...ammoTypes.map((a) => cell(a, bold: true)),
                             ],
                           ),
-
-                          /// INITIAL
                           Row(
                             children: [
                               cell("Initial", bold: true, width: 150),
                               ...ammoTypes.map((a) => inputCell(a, initial)),
                             ],
                           ),
-
-                          /// THRESHOLD
                           Row(
                             children: [
                               cell("Threshold", bold: true, width: 150),
                               ...ammoTypes.map((a) => inputCell(a, threshold)),
                             ],
                           ),
-
-                          /// GUN ROWS
                           ...gunRows.map(
                             (g) => Row(
                               children: [
@@ -270,32 +254,24 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
                 ),
               ),
             ),
-
             const SizedBox(height: 20),
-
-            /// START BUTTON
             SizedBox(
               width: 220,
               height: 60,
               child: ElevatedButton(
                 onPressed: started ? null : startPressed,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      started ? Colors.grey : Colors.green.shade300,
+                  backgroundColor: started ? Colors.grey : Colors.green.shade300,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
                 child: const Text(
                   "START",
-                  style: TextStyle(
-                    fontSize: 22,
-                    color: Colors.black,
-                  ),
+                  style: TextStyle(fontSize: 22, color: Colors.black),
                 ),
               ),
             ),
-
             const SizedBox(height: 20),
           ],
         ),
