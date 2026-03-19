@@ -4,15 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'constants.dart';
+import 'auth_service.dart';
 
 class TroopLeaderDashboard extends StatefulWidget {
   final String position;
   final String troop;
+  final VoidCallback onLogout;
 
   const TroopLeaderDashboard({
     super.key,
     required this.position,
     required this.troop,
+    required this.onLogout,
   });
 
   @override
@@ -62,16 +65,20 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   }
 
   void startPressed() {
+    final startTime = Timestamp.now();
     setState(() {
       started = true;
-      sessionStart = Timestamp.now();
+      sessionStart = startTime;
       for (var ammo in ammoTypes) {
         for (var gun in gunRows) {
           guns[gun]![ammo] = initial[ammo]!;
         }
       }
     });
-    startListeningToEvents();
+    // Small delay so the listener doesn't catch events right at the boundary
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) startListeningToEvents();
+    });
   }
 
   /// Triggers a short flash highlight on a specific cell
@@ -84,38 +91,44 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   }
 
   void startListeningToEvents() {
+    bool initialLoadDone = false;
+
     eventSubscription = FirebaseFirestore.instance
         .collection("events")
         .where("troop", isEqualTo: widget.troop)
         .where("timestamp", isGreaterThan: sessionStart)
         .snapshots()
         .listen((snapshot) {
-      for (var change in snapshot.docChanges) {
-        if (change.type == DocumentChangeType.added) {
-          final data = change.doc.data()!;
-          String gun = data["gun"];
-          String ammo = data["ammo"];
 
-          setState(() {
-            if (guns[gun]![ammo]! > 0) {
-              guns[gun]![ammo] = guns[gun]![ammo]! - 1;
+          if (!initialLoadDone) {                          // ← skip first batch
+            initialLoadDone = true;
+            return;
+          }
+
+          for (var change in snapshot.docChanges) {
+            if (change.type == DocumentChangeType.added) {
+              final data = change.doc.data()!;
+              String gun = data["gun"];
+              String ammo = data["ammo"];
+
+              setState(() {
+                if (guns[gun]![ammo]! > 0) {
+                  guns[gun]![ammo] = guns[gun]![ammo]! - 1;
+                }
+                if (ammo != Constants.SUPERCART) {
+                  if (guns[gun]![Constants.CART]! > 0) {
+                    guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! - 1;
+                  }
+                } else {
+                  guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! + 1;
+                }
+              });
+
+              flashCell(gun, ammo);
+              flashCell(gun, Constants.CART);
             }
-
-            if (ammo != Constants.SUPERCART) {
-              if (guns[gun]![Constants.CART]! > 0) {
-                guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! - 1;
-              }
-            } else {
-              guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! + 1;
-            }
-          });
-
-          // Flash the updated cells
-          flashCell(gun, ammo);
-          flashCell(gun, Constants.CART);
-        }
-      }
-    });
+          }
+        });
   }
 
   @override
@@ -206,6 +219,16 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
       appBar: AppBar(
         title: Text("Troop ${widget.troop} Dashboard"),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async {
+              await AuthService.logout();
+              widget.onLogout();
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(

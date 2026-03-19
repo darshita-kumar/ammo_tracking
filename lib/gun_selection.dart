@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'ammunition_screen.dart';
 import 'constants.dart';
+import 'auth_service.dart';
 
 class GunSelectionScreen extends StatefulWidget {
 
   final String position;
   final String troop;
+  final VoidCallback onLogout;
 
   const GunSelectionScreen({
     super.key,
     required this.position,
     required this.troop,
+    required this.onLogout,
   });
 
   @override
@@ -50,6 +53,18 @@ class _GunSelectionScreenState extends State<GunSelectionScreen> {
   Widget build(BuildContext context) {
 
     return Scaffold(
+      appBar: AppBar(                        
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async {
+              await AuthService.logout();
+              widget.onLogout();
+            },
+          ),
+        ],
+      ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -83,6 +98,7 @@ class _GunSelectionScreenState extends State<GunSelectionScreen> {
                             position: widget.position,
                             troop: widget.troop,
                             gun: selectedGun!,
+                            onLogout: widget.onLogout,
                           ),
                         ),
                       );

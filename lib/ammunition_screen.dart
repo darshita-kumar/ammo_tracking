@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'db_helper.dart';
 import 'constants.dart';
+import 'auth_service.dart';
 
 class AmmunitionScreen extends StatefulWidget {
 
   final String position;
   final String troop;
   final String gun;
+  final VoidCallback onLogout;
 
   const AmmunitionScreen({
     super.key,
     required this.position,
     required this.troop,
     required this.gun,
+    required this.onLogout,
   });
 
   @override
@@ -109,6 +112,18 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
   Widget build(BuildContext context) {
 
     return Scaffold(
+    appBar: AppBar(
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.logout),
+          tooltip: 'Logout',
+          onPressed: () async {
+            await AuthService.logout();
+            widget.onLogout();
+          },
+        ),
+      ],
+    ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(

@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'gun_selection.dart';
 import 'troop_leader_dashboard.dart';
+import 'auth_service.dart';
 
-class FirstScreen extends StatefulWidget {
-  const FirstScreen({super.key});
+class SelectRoleScreen extends StatefulWidget {
+  final VoidCallback onLogout;
+  const SelectRoleScreen({super.key, required this.onLogout});
 
   @override
-  State<FirstScreen> createState() => _FirstScreenState();
+  State<SelectRoleScreen> createState() => _SelectRoleScreenState();
 }
 
-class _FirstScreenState extends State<FirstScreen> {
+class _SelectRoleScreenState extends State<SelectRoleScreen> {
 
   String? selectedPosition;
   String? selectedTroop;
@@ -40,6 +42,18 @@ class _FirstScreenState extends State<FirstScreen> {
   Widget build(BuildContext context) {
 
     return Scaffold(
+      appBar: AppBar(                          // ← added
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async {
+              await AuthService.logout();
+              widget.onLogout();
+            },
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -102,6 +116,7 @@ class _FirstScreenState extends State<FirstScreen> {
                         builder: (_) => GunSelectionScreen(
                           position: selectedPosition!,
                           troop: selectedTroop!,
+                          onLogout: widget.onLogout,
                         ),
                       ),
                     );
@@ -112,11 +127,11 @@ class _FirstScreenState extends State<FirstScreen> {
                         builder: (_) => TroopLeaderDashboard(
                           position: selectedPosition!,
                           troop: selectedTroop!,
+                          onLogout: widget.onLogout,
                         ),
                       ),
                     );
                   }
-
                 }
               : null,
               child: const Text(
