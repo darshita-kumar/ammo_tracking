@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'gun_selection.dart';
-import 'troop_leader_dashboard.dart';
+import 'shooting_setup_screen.dart';
 import 'auth_service.dart';
 
 class SelectRoleScreen extends StatefulWidget {
@@ -124,9 +124,8 @@ class _SelectRoleScreenState extends State<SelectRoleScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => TroopLeaderDashboard(
-                          position: selectedPosition!,
-                          troop: selectedTroop!,
+                        builder: (_) => ShootingSetupScreen(
+                          troop:    selectedTroop!,
                           onLogout: widget.onLogout,
                         ),
                       ),

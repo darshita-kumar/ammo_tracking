@@ -8,6 +8,8 @@ class AmmunitionScreen extends StatefulWidget {
   final String position;
   final String troop;
   final String gun;
+  final String shootingId;
+  final String shootingName;
   final VoidCallback onLogout;
 
   const AmmunitionScreen({
@@ -15,6 +17,8 @@ class AmmunitionScreen extends StatefulWidget {
     required this.position,
     required this.troop,
     required this.gun,
+    required this.shootingId,
+    required this.shootingName,
     required this.onLogout,
   });
 
@@ -70,7 +74,7 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
 
         /// Send event
         sendAmmoEvent(
-          troop: widget.troop,
+          shootingId: widget.shootingId,
           gun: widget.gun,
           ammo: label,
         );

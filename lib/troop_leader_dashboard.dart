@@ -9,12 +9,16 @@ import 'auth_service.dart';
 class TroopLeaderDashboard extends StatefulWidget {
   final String position;
   final String troop;
+  final String shootingId;
+  final String shootingName; 
   final VoidCallback onLogout;
 
   const TroopLeaderDashboard({
     super.key,
     required this.position,
     required this.troop,
+    required this.shootingId,
+    required this.shootingName,
     required this.onLogout,
   });
 
@@ -92,24 +96,22 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
 
   void startListeningToEvents() {
     bool initialLoadDone = false;
-
     eventSubscription = FirebaseFirestore.instance
-        .collection("events")
-        .where("troop", isEqualTo: widget.troop)
-        .where("timestamp", isGreaterThan: sessionStart)
+        .collection('shootings')
+        .doc(widget.shootingId)
+        .collection('events')              // ← subcollection
+        .where('timestamp', isGreaterThan: sessionStart)
         .snapshots()
         .listen((snapshot) {
-
-          if (!initialLoadDone) {                          // ← skip first batch
+          if (!initialLoadDone) {
             initialLoadDone = true;
             return;
           }
-
           for (var change in snapshot.docChanges) {
             if (change.type == DocumentChangeType.added) {
               final data = change.doc.data()!;
-              String gun = data["gun"];
-              String ammo = data["ammo"];
+              String gun  = data['gun'];
+              String ammo = data['ammo'];
 
               setState(() {
                 if (guns[gun]![ammo]! > 0) {
@@ -117,10 +119,12 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
                 }
                 if (ammo != Constants.SUPERCART) {
                   if (guns[gun]![Constants.CART]! > 0) {
-                    guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! - 1;
+                    guns[gun]![Constants.CART] =
+                        guns[gun]![Constants.CART]! - 1;
                   }
                 } else {
-                  guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! + 1;
+                  guns[gun]![Constants.CART] =
+                      guns[gun]![Constants.CART]! + 1;
                 }
               });
 
@@ -217,7 +221,15 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Troop ${widget.troop} Dashboard"),
+        title: Column(
+          children: [
+            Text("Troop ${widget.troop} Dashboard"),
+            Text(
+              widget.shootingName,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
         centerTitle: true,
         actions: [
           IconButton(
@@ -278,22 +290,51 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
               ),
             ),
             const SizedBox(height: 20),
-            SizedBox(
-              width: 220,
-              height: 60,
-              child: ElevatedButton(
-                onPressed: started ? null : startPressed,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: started ? Colors.grey : Colors.green.shade300,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+
+                // START
+                SizedBox(
+                  width: 200,
+                  height: 60,
+                  child: ElevatedButton(
+                    onPressed: started ? null : startPressed,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          started ? Colors.grey : Colors.green.shade300,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30)),
+                    ),
+                    child: const Text('START',
+                        style: TextStyle(fontSize: 22, color: Colors.black)),
                   ),
                 ),
-                child: const Text(
-                  "START",
-                  style: TextStyle(fontSize: 22, color: Colors.black),
+
+                const SizedBox(width: 20),
+
+                // END SHOOTING (placeholder)
+                SizedBox(
+                  width: 200,
+                  height: 60,
+                  child: ElevatedButton(
+                    onPressed: !started
+                        ? null
+                        : () {
+                            // TODO: implement end shooting
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          !started ? Colors.grey : Colors.red.shade300,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30)),
+                    ),
+                    child: const Text('END SHOOTING',
+                        style: TextStyle(fontSize: 18, color: Colors.black)),
+                  ),
                 ),
-              ),
+
+              ],
             ),
             const SizedBox(height: 20),
           ],
