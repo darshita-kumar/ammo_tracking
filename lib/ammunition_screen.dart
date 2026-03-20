@@ -1,10 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'db_helper.dart';
 import 'constants.dart';
 import 'auth_service.dart';
+import 'good_shooting_screen.dart';
 
 class AmmunitionScreen extends StatefulWidget {
-
   final String position;
   final String troop;
   final String gun;
@@ -28,20 +30,56 @@ class AmmunitionScreen extends StatefulWidget {
 
 class _AmmunitionScreenState extends State<AmmunitionScreen> {
 
+  StreamSubscription? shootingStatusSubscription;
+
   Map<String, int> ammoCounts = {
     Constants.HE_PLUGGED: 0,
-    Constants.AB: 0,
-    Constants.SMK: 0,
-    Constants.HE_117: 0,
-    Constants.ILL: 0,
-    Constants.SUPERCART: 0,
+    Constants.AB:         0,
+    Constants.SMK:        0,
+    Constants.HE_117:     0,
+    Constants.ILL:        0,
+    Constants.SUPERCART:  0,
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _listenToShootingStatus();
+  }
+
+  void _listenToShootingStatus() {
+    shootingStatusSubscription = FirebaseFirestore.instance
+        .collection('shootings')
+        .doc(widget.shootingId)
+        .snapshots()
+        .listen((snap) {
+      if (!snap.exists) return;
+      final status = snap.data()?['status'];
+      if (status == 'ended' && mounted) {
+        shootingStatusSubscription?.cancel();
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                GoodShootingScreen(onLogout: widget.onLogout),
+          ),
+          (route) => false,   // clear entire stack
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    shootingStatusSubscription?.cancel();
+    super.dispose();
+  }
 
   Color getAmmoColor(String ammo) {
     switch (ammo) {
       case Constants.HE_PLUGGED:
       case Constants.HE_117:
-        return Colors.amber;   
+        return Colors.amber;
       case Constants.ILL:
         return Colors.white;
       case Constants.SMK:
@@ -66,68 +104,47 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
         minimumSize: const Size(160, 60),
       ),
       onPressed: () async {
-        /// Trigger flash
         setState(() {
           flashingButtons.add(label);
           ammoCounts[label] = ammoCounts[label]! + 1;
         });
 
-        /// Send event
         sendAmmoEvent(
           shootingId: widget.shootingId,
-          gun: widget.gun,
-          ammo: label,
+          gun:        widget.gun,
+          ammo:       label,
         );
 
-        /// Reset flash after 150ms
         await Future.delayed(const Duration(milliseconds: 150));
-
-        setState(() {
-          flashingButtons.remove(label);
-        });
+        if (mounted) setState(() => flashingButtons.remove(label));
       },
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.black,
-            ),
-          ),
-          Text(
-            ammoCounts[label].toString(),
-            style: const TextStyle(
-              fontSize: 18,
-              color: Colors.black,
-            ),
-          ),
+          Text(label,
+              style: const TextStyle(fontSize: 16, color: Colors.black)),
+          Text(ammoCounts[label].toString(),
+              style: const TextStyle(fontSize: 18, color: Colors.black)),
         ],
       ),
     );
   }
 
-  bool get hasSelection {
-    return ammoCounts.values.any((v) => v > 0);
-  }
-
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-    appBar: AppBar(
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.logout),
-          tooltip: 'Logout',
-          onPressed: () async {
-            await AuthService.logout();
-            widget.onLogout();
-          },
-        ),
-      ],
-    ),
+      appBar: AppBar(
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async {
+              await AuthService.logout();
+              widget.onLogout();
+            },
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -135,7 +152,8 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
           children: [
 
             const SizedBox(height: 20),
-            /// Troop + Gun Info
+
+            // ── Info banner ─────────────────────────────────
             Container(
               padding: const EdgeInsets.all(12),
               margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -147,50 +165,39 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-
-                  Column(
-                    children: [
-                      const Text(
-                        "TROOP",
+                  Column(children: [
+                    const Text("TROOP",
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        widget.troop,
-                        style: const TextStyle(fontSize: 20),
-                      ),
-                    ],
-                  ),
-
-                  Column(
-                    children: [
-                      const Text(
-                        "GUN",
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold)),
+                    Text(widget.troop,
+                        style: const TextStyle(fontSize: 20)),
+                  ]),
+                  Column(children: [
+                    const Text("GUN",
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        widget.gun,
-                        style: const TextStyle(fontSize: 20),
-                      ),
-                    ],
-                  ),
-
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold)),
+                    Text(widget.gun,
+                        style: const TextStyle(fontSize: 20)),
+                  ]),
+                  Column(children: [
+                    const Text("SHOOTING",
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold)),
+                    Text(widget.shootingName,
+                        style: const TextStyle(fontSize: 16)),
+                  ]),
                 ],
               ),
             ),
 
             const SizedBox(height: 20),
-            const Text(
-              "SELECT AMMUNITION",
-              style: TextStyle(fontSize: 22),
-            ),
-
+            const Text("SELECT AMMUNITION",
+                style: TextStyle(fontSize: 22)),
             const SizedBox(height: 40),
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -198,7 +205,6 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
                 ammoButton(Constants.HE_117),
               ],
             ),
-
             const SizedBox(height: 30),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -207,7 +213,6 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
                 ammoButton(Constants.ILL),
               ],
             ),
-
             const SizedBox(height: 30),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -216,7 +221,6 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
                 ammoButton(Constants.SUPERCART),
               ],
             ),
-
           ],
         ),
       ),
