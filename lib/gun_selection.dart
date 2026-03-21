@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'ammunition_screen.dart';
 import 'constants.dart';
-import 'auth_service.dart';
 
 class GunSelectionScreen extends StatefulWidget {
   final String position;
   final String troop;
-  final VoidCallback onLogout;
+  final Future<void> Function() onLogout;
 
   const GunSelectionScreen({
     super.key,
@@ -117,8 +116,7 @@ class _GunSelectionScreenState extends State<GunSelectionScreen> {
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
             onPressed: () async {
-              await AuthService.logout();
-              widget.onLogout();
+              await widget.onLogout();
             },
           ),
         ],

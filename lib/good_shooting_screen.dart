@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'auth_service.dart';
 
 class GoodShootingScreen extends StatelessWidget {
-  final VoidCallback onLogout;
+  final Future<void> Function() onLogout;
 
   const GoodShootingScreen({super.key, required this.onLogout});
 
@@ -47,8 +46,7 @@ class GoodShootingScreen extends StatelessWidget {
               height: 54,
               child: ElevatedButton(
                 onPressed: () async {
-                  await AuthService.logout();
-                  onLogout();
+                  await onLogout();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green.shade300,

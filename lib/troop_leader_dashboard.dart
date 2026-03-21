@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'constants.dart';
-import 'auth_service.dart';
 import 'good_shooting_screen.dart';
 
 class TroopLeaderDashboard extends StatefulWidget {
@@ -11,7 +10,7 @@ class TroopLeaderDashboard extends StatefulWidget {
   final String troop;
   final String shootingId;
   final String shootingName;
-  final VoidCallback onLogout;
+   final Future<void> Function() onLogout;
 
   const TroopLeaderDashboard({
     super.key,
@@ -305,8 +304,7 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
             onPressed: () async {
-              await AuthService.logout();
-              widget.onLogout();
+              await widget.onLogout();
             },
           ),
         ],

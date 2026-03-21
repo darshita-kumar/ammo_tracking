@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'gun_selection.dart';
 import 'shooting_setup_screen.dart';
-import 'auth_service.dart';
 
 class SelectRoleScreen extends StatefulWidget {
-  final VoidCallback onLogout;
+  final Future<void> Function() onLogout;
   const SelectRoleScreen({super.key, required this.onLogout});
 
   @override
@@ -42,14 +41,13 @@ class _SelectRoleScreenState extends State<SelectRoleScreen> {
   Widget build(BuildContext context) {
 
     return Scaffold(
-      appBar: AppBar(                          // ← added
+      appBar: AppBar(                          
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
             onPressed: () async {
-              await AuthService.logout();
-              widget.onLogout();
+              await widget.onLogout();
             },
           ),
         ],

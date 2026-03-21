@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'troop_leader_dashboard.dart';
-import 'auth_service.dart';
 
 class ShootingSetupScreen extends StatefulWidget {
   final String troop;
-  final VoidCallback onLogout;
+  final Future<void> Function() onLogout;
 
   const ShootingSetupScreen({
     super.key,
@@ -73,8 +72,7 @@ class _ShootingSetupScreenState extends State<ShootingSetupScreen> {
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
             onPressed: () async {
-              await AuthService.logout();
-              widget.onLogout();
+              await widget.onLogout();
             },
           ),
         ],

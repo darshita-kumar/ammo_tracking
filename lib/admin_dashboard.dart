@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'auth_service.dart';
 
 class AdminDashboard extends StatefulWidget {
-  final VoidCallback onLogout;
+  final Future<void> Function() onLogout;
   const AdminDashboard({super.key, required this.onLogout});
 
   @override
@@ -133,8 +133,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
             onPressed: () async {
-              await AuthService.logout();
-              widget.onLogout();
+              await widget.onLogout();
             },
           ),
         ],
