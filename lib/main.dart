@@ -21,7 +21,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   Map<String, dynamic>? _userData;
   bool _checkingSession = true;
-  final _navigatorKey = GlobalKey<NavigatorState>();
+  Key _appKey = UniqueKey();
 
   @override
   void initState() {
@@ -43,17 +43,12 @@ class _MyAppState extends State<MyApp> {
   Future<void> _onLogout() async {
     await AuthService.logout();       // clears SharedPreferences
     setState(() => _userData = null);
-    _navigatorKey.currentState?.pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => LoginScreen(onLoginSuccess: _onLoginSuccess),
-      ),
-      (route) => false,
-    );
+    _appKey = UniqueKey();
   }
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: _navigatorKey,
+      key: _appKey,      
       home: _buildHome(),
     );
   }
