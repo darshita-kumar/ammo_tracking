@@ -132,7 +132,10 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (_) => GoodShootingScreen(onLogout: widget.onLogout),
+        builder: (_) => GoodShootingScreen(
+          onLogout: widget.onLogout, 
+          isTroopLeader: true, 
+          shootingId: widget.shootingId,),
       ),
       (route) => false,   // clear the entire stack
     );

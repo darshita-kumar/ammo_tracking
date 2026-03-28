@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
+import 'shoot_summary_screen.dart';
 
 class GoodShootingScreen extends StatelessWidget {
   final Future<void> Function() onLogout;
+  final bool isTroopLeader;
+  final String shootingId;
 
-  const GoodShootingScreen({super.key, required this.onLogout});
+  const GoodShootingScreen({
+    super.key, 
+      required this.onLogout,
+      required this.isTroopLeader,
+      required this.shootingId,
+    });
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +40,7 @@ class GoodShootingScreen extends StatelessWidget {
             const SizedBox(height: 12),
 
             Text(
-              'End firing, good shooting!',
+              'Cease firing, good shooting!',
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey.shade600,
@@ -60,6 +68,33 @@ class GoodShootingScreen extends StatelessWidget {
                 ),
               ),
             ),
+            if (isTroopLeader) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: 200,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ShootSummaryScreen(shootingId: shootingId),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue.shade300,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                  child: const Text(
+                    'Shoot Summary',
+                    style: TextStyle(fontSize: 18, color: Colors.black),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

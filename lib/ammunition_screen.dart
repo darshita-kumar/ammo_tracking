@@ -60,7 +60,11 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
           context,
           MaterialPageRoute(
             builder: (_) =>
-                GoodShootingScreen(onLogout: widget.onLogout),
+                GoodShootingScreen(
+                  onLogout: widget.onLogout,
+                  isTroopLeader: false,
+                  shootingId: widget.shootingId,
+                ),
           ),
           (route) => false,   // clear entire stack
         );
