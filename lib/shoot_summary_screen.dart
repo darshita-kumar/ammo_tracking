@@ -91,10 +91,47 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
     }
   }
 
+  // Exports only shoot summary, not timings
+  // Future<void> _exportToExcel() async {
+  //   final excel = xl.Excel.createExcel();
+  //   final sheet = excel['Shoot Summary'];
+
+  //   final headers = ['Gun Platform', ...ammoTypes];
+  //   for (int i = 0; i < headers.length; i++) {
+  //     sheet
+  //         .cell(xl.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0))
+  //         .value = xl.TextCellValue(headers[i]);
+  //   }
+
+  //   for (int r = 0; r < gunRows.length; r++) {
+  //     final gun = gunRows[r];
+  //     sheet
+  //         .cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: r + 1))
+  //         .value = xl.TextCellValue(gun);
+
+  //     for (int c = 0; c < ammoTypes.length; c++) {
+  //       sheet
+  //           .cell(xl.CellIndex.indexByColumnRow(columnIndex: c + 1, rowIndex: r + 1))
+  //           .value = xl.IntCellValue(guns[gun]![ammoTypes[c]]!);
+  //     }
+  //   }
+
+  //   final bytes = excel.encode()!;
+  //   final dir = await getTemporaryDirectory();
+  //   final file = File('${dir.path}/shoot_summary_${widget.shootingId}.xlsx');
+  //   await file.writeAsBytes(bytes);
+
+  //   await Share.shareXFiles(
+  //     [XFile(file.path)],
+  //     subject: 'Shoot Summary',
+  //   );
+  // }
+
   Future<void> _exportToExcel() async {
     final excel = xl.Excel.createExcel();
     final sheet = excel['Shoot Summary'];
 
+    // ── Summary table ──────────────────────────────────────────
     final headers = ['Gun Platform', ...ammoTypes];
     for (int i = 0; i < headers.length; i++) {
       sheet
@@ -115,6 +152,54 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
       }
     }
 
+    // ── Timings section ────────────────────────────────────────
+    int currentRow = gunRows.length + 3; // leave a blank row after summary
+
+    for (final gun in gunRows) {
+      final events = gunEvents[gun]!;
+
+      // Gun header
+      sheet
+          .cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow))
+          .value = xl.TextCellValue('$gun — Firing Timings');
+      currentRow++;
+
+      // Column headers
+      sheet
+          .cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow))
+          .value = xl.TextCellValue('#');
+      sheet
+          .cell(xl.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: currentRow))
+          .value = xl.TextCellValue('Time');
+      sheet
+          .cell(xl.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentRow))
+          .value = xl.TextCellValue('Ammunition');
+      currentRow++;
+
+      if (events.isEmpty) {
+        sheet
+            .cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow))
+            .value = xl.TextCellValue('No rounds fired.');
+        currentRow += 2; // blank row before next gun
+      } else {
+        for (int i = 0; i < events.length; i++) {
+          final event = events[i];
+          sheet
+              .cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow))
+              .value = xl.IntCellValue(i + 1);
+          sheet
+              .cell(xl.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: currentRow))
+              .value = xl.TextCellValue(_formatTime(event['timestamp']));
+          sheet
+              .cell(xl.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentRow))
+              .value = xl.TextCellValue(event['ammo']);
+          currentRow++;
+        }
+        currentRow++; // blank row between guns
+      }
+    }
+
+    // ── Save and share ─────────────────────────────────────────
     final bytes = excel.encode()!;
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/shoot_summary_${widget.shootingId}.xlsx');
