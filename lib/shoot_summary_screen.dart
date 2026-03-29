@@ -33,6 +33,7 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
 
   // guns[gun][ammo] = total count
   Map<String, Map<String, int>> guns = {};
+  Map<String, List<Map<String, dynamic>>> gunEvents = {};
 
   @override
   void initState() {
@@ -41,9 +42,9 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
   }
 
   Future<void> _fetchSummary() async {
-    // Initialise all cells to 0
     for (var g in gunRows) {
       guns[g] = {};
+      gunEvents[g] = []; // add this
       for (var a in ammoTypes) {
         guns[g]![a] = 0;
       }
@@ -54,25 +55,30 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
           .collection('shootings')
           .doc(widget.shootingId)
           .collection('events')
+          .orderBy('timestamp') // add ordering
           .get();
 
       for (var doc in snapshot.docs) {
         final data = doc.data();
-        final gun  = data['gun']  as String?;
-        final ammo = data['ammo'] as String?;
+        final gun       = data['gun']       as String?;
+        final ammo      = data['ammo']      as String?;
+        final timestamp = data['timestamp'] as Timestamp?;
 
         if (gun == null || ammo == null) continue;
         if (!guns.containsKey(gun)) continue;
         if (!guns[gun]!.containsKey(ammo)) continue;
 
-        // Count the fired round
         guns[gun]![ammo] = guns[gun]![ammo]! + 1;
 
-        // CART: non-SUPERCART rounds consume a cart, SUPERCART adds one
         if (ammo != Constants.SUPERCART) {
           guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! + 1;
         } else {
           guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! - 1;
+        }
+
+        // Store event for timings section
+        if (timestamp != null) {
+          gunEvents[gun]!.add({'ammo': ammo, 'timestamp': timestamp});
         }
       }
 
@@ -117,6 +123,124 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
     await Share.shareXFiles(
       [XFile(file.path)],
       subject: 'Shoot Summary',
+    );
+  }
+
+  String _formatTime(Timestamp ts) {
+    final dt = ts.toDate().toLocal();
+    final h  = dt.hour.toString().padLeft(2, '0');
+    final m  = dt.minute.toString().padLeft(2, '0');
+    final s  = dt.second.toString().padLeft(2, '0');
+    return '$h:$m:$s';
+  }
+
+  Widget _timingsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 32),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'Firing Timings',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...gunRows.map((gun) {
+          final events = gunEvents[gun]!;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Gun header — fixed width instead of double.infinity
+                Container(
+                  width: 400, // fixed width, not double.infinity
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  color: Colors.blueGrey.shade100,
+                  child: Text(
+                    gun,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                if (events.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Text('No rounds fired.',
+                        style: TextStyle(color: Colors.grey)),
+                  )
+                else
+                  SizedBox(
+                    width: 400, // constrain the table to a fixed width
+                    child: Table(
+                      border: TableBorder.all(color: Colors.black45),
+                      columnWidths: const {
+                        0: FixedColumnWidth(50),
+                        1: FixedColumnWidth(120),
+                        2: FlexColumnWidth(),
+                      },
+                      children: [
+                        TableRow(
+                          decoration:
+                              BoxDecoration(color: Colors.grey.shade200),
+                          children: const [
+                            Padding(
+                              padding: EdgeInsets.all(8),
+                              child: Text('#',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.all(8),
+                              child: Text('Time',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.all(8),
+                              child: Text('Ammunition',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                        ...events.asMap().entries.map((entry) {
+                          final i     = entry.key;
+                          final event = entry.value;
+                          return TableRow(
+                            decoration: BoxDecoration(
+                              color: i.isEven
+                                  ? Colors.white
+                                  : Colors.grey.shade50,
+                            ),
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Text('${i + 1}'),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Text(
+                                    _formatTime(event['timestamp'])),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Text(event['ammo']),
+                              ),
+                            ],
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 
@@ -187,6 +311,7 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
                                 ],
                               ),
                             ),
+                            _timingsSection(),
                           ],
                         ),
                       ),
