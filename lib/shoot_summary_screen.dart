@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'constants.dart';
+import 'package:excel/excel.dart' as xl;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
 
 class ShootSummaryScreen extends StatefulWidget {
   final String shootingId;
@@ -81,6 +85,41 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
     }
   }
 
+  Future<void> _exportToExcel() async {
+    final excel = xl.Excel.createExcel();
+    final sheet = excel['Shoot Summary'];
+
+    final headers = ['Gun Platform', ...ammoTypes];
+    for (int i = 0; i < headers.length; i++) {
+      sheet
+          .cell(xl.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0))
+          .value = xl.TextCellValue(headers[i]);
+    }
+
+    for (int r = 0; r < gunRows.length; r++) {
+      final gun = gunRows[r];
+      sheet
+          .cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: r + 1))
+          .value = xl.TextCellValue(gun);
+
+      for (int c = 0; c < ammoTypes.length; c++) {
+        sheet
+            .cell(xl.CellIndex.indexByColumnRow(columnIndex: c + 1, rowIndex: r + 1))
+            .value = xl.IntCellValue(guns[gun]![ammoTypes[c]]!);
+      }
+    }
+
+    final bytes = excel.encode()!;
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/shoot_summary_${widget.shootingId}.xlsx');
+    await file.writeAsBytes(bytes);
+
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      subject: 'Shoot Summary',
+    );
+  }
+
   Widget _cell(String text, {bool bold = false, double width = 110, Color? color}) {
     return Container(
       width: width,
@@ -106,6 +145,13 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
       appBar: AppBar(
         title: const Text('Shoot Summary'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: 'Export to Excel',
+            onPressed: _loading ? null : _exportToExcel,
+          ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
