@@ -30,20 +30,10 @@ class GoodShootingScreen extends StatelessWidget {
             const SizedBox(height: 24),
 
             const Text(
-              'Good Shooting!',
+              'Cease firing, Good shooting!',
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            Text(
-              'Cease firing, good shooting!',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey.shade600,
               ),
             ),
 

@@ -21,6 +21,33 @@ class _ShootingSetupScreenState extends State<ShootingSetupScreen> {
   bool _loading = false;
   String? _error;
 
+  @override
+  void initState() {
+    super.initState();
+    _endActiveShootsForTroop();
+  }
+
+  Future<void> _endActiveShootsForTroop() async {
+    try {
+      final activeShoots = await FirebaseFirestore.instance
+          .collection('shootings')
+          .where('troop', isEqualTo: widget.troop)
+          .where('status', isEqualTo: 'active')
+          .get();
+
+      if (activeShoots.docs.isNotEmpty) {
+        await Future.wait(
+          activeShoots.docs.map((doc) =>
+            doc.reference.update({'status': 'ended'})
+          ),
+        );
+      }
+    } catch (e) {
+      // Non-critical — if this fails, _startShooting will catch it too
+      debugPrint('Failed to end active shoots: $e');
+    }
+  }
+
   Future<void> _startShooting() async {
     if (_nameCtrl.text.trim().isEmpty) {
       setState(() => _error = 'Please enter a shooting name.');
@@ -30,11 +57,10 @@ class _ShootingSetupScreenState extends State<ShootingSetupScreen> {
     setState(() { _loading = true; _error = null; });
 
     try {
-      // Create the shooting document
       final docRef = await FirebaseFirestore.instance
           .collection('shootings')
           .add({
-        'name':      _nameCtrl.text.trim(),
+        'name':      _nameCtrl.text.trim().toUpperCase(),
         'troop':     widget.troop,
         'status':    'active',
         'createdAt': FieldValue.serverTimestamp(),
@@ -46,11 +72,11 @@ class _ShootingSetupScreenState extends State<ShootingSetupScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => TroopLeaderDashboard(
-            troop:      widget.troop,
-            position:   'Troop Leader',
-            shootingId: docRef.id,
-            shootingName: _nameCtrl.text.trim(),
-            onLogout:   widget.onLogout,
+            troop:        widget.troop,
+            position:     'Troop Leader',
+            shootingId:   docRef.id,
+            shootingName: _nameCtrl.text.trim().toUpperCase(),
+            onLogout:     widget.onLogout,
           ),
         ),
       );
