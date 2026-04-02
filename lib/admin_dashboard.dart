@@ -13,7 +13,7 @@ class AdminDashboard extends StatefulWidget {
 class _AdminDashboardState extends State<AdminDashboard> {
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  String _role    = 'troop_leader';
+  String _role    = 'on_field';
   bool   _creating = false;
 
   Future<void> _createUser() async {
@@ -177,8 +177,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         border: OutlineInputBorder()),
                     items: const [
                       DropdownMenuItem(
-                          value: 'troop_leader',
-                          child: Text('Troop Leader')),
+                          value: 'on_field',
+                          child: Text('On-field')),
                       DropdownMenuItem(
                           value: 'admin',
                           child: Text('Admin')),
