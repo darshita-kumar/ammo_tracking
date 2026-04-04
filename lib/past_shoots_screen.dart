@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'combined_shoot_summary_screen.dart';
 
 class PastShootsScreen extends StatefulWidget {
-  const PastShootsScreen({super.key});
+  final Future<void> Function() onLogout;
+  const PastShootsScreen({super.key,required this.onLogout,});
 
   @override
   State<PastShootsScreen> createState() => _PastShootsScreenState();
@@ -89,6 +90,13 @@ class _PastShootsScreenState extends State<PastShootsScreen> {
       appBar: AppBar(
         title: const Text('Past Shoots'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async => await widget.onLogout(),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -162,6 +170,7 @@ class _PastShootsScreenState extends State<PastShootsScreen> {
                           builder: (_) => CombinedShootSummaryScreen(
                             shootName: _selectedName!,
                             shoots: _shootsByName[_selectedName!]!,
+                            onLogout: widget.onLogout, 
                           ),
                         ),
                       );

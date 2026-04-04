@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'constants.dart';
 import 'dart:io';
+import 'download_util.dart';
 import 'package:excel/excel.dart' as xl;
 
 class ShootSummaryScreen extends StatefulWidget {
   final String shootingId;
+  final Future<void> Function() onLogout;
 
-  const ShootSummaryScreen({super.key, required this.shootingId});
+  const ShootSummaryScreen({
+      super.key, 
+      required this.shootingId,
+      required this.onLogout,
+    });
 
   @override
   State<ShootSummaryScreen> createState() => _ShootSummaryScreenState();
@@ -179,28 +185,11 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
     }
 
     // ── Save to Downloads folder ───────────────────────────────
-    try {
-      final bytes = excel.encode()!;
-      final fileName =
-          '${_shootingName.replaceAll(' ', '_')}_${widget.shootingId}.xlsx';
-      final file = File('/storage/emulated/0/Download/$fileName');
-      await file.writeAsBytes(bytes);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Saved to Downloads: $fileName'),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e')),
-        );
-      }
-    }
+    await saveExcelToDownloads(
+      context: context,
+      excel: excel,
+      fileName: '${_shootingName.replaceAll(' ', '_')}_${widget.shootingId}.xlsx',
+    );
   }
   
   String _formatTime(Timestamp ts) {
@@ -360,6 +349,11 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
             icon: const Icon(Icons.download),
             tooltip: 'Export to Excel',
             onPressed: _loading ? null : _exportToExcel,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async => await widget.onLogout(),
           ),
         ],
       ),

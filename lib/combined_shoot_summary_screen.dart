@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:excel/excel.dart' as xl;
-import 'dart:io';
 import 'constants.dart';
+import 'download_util.dart';
 
 class CombinedShootSummaryScreen extends StatefulWidget {
   final String shootName;
-  // Each entry has 'id' and 'troop'
   final List<Map<String, dynamic>> shoots;
+  final Future<void> Function() onLogout;
 
   const CombinedShootSummaryScreen({
     super.key,
     required this.shootName,
     required this.shoots,
+    required this.onLogout, 
   });
 
   @override
@@ -385,28 +386,11 @@ class _CombinedShootSummaryScreenState
     }
 
     // ── Save to Downloads folder ───────────────────────────────
-    try {
-      final bytes = excel.encode()!;
-      final fileName =
-          '${widget.shootName.replaceAll(' ', '_')}_combined.xlsx';
-      final file = File('/storage/emulated/0/Download/$fileName');
-      await file.writeAsBytes(bytes);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Saved to Downloads: $fileName'),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e')),
-        );
-      }
-    }
+    await saveExcelToDownloads(
+      context: context,
+      excel: excel,
+      fileName: '${widget.shootName.replaceAll(' ', '_')}_combined.xlsx',
+    );
   }
 
   @override
@@ -426,6 +410,11 @@ class _CombinedShootSummaryScreenState
             icon: const Icon(Icons.download),
             tooltip: 'Download Excel',
             onPressed: _loading ? null : _exportToExcel,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async => await widget.onLogout(),
           ),
         ],
       ),

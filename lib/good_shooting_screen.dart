@@ -68,7 +68,7 @@ class GoodShootingScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ShootSummaryScreen(shootingId: shootingId),
+                        builder: (_) => ShootSummaryScreen(shootingId: shootingId, onLogout: onLogout,),
                       ),
                     );
                   },

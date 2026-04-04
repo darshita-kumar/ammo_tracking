@@ -159,7 +159,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const PastShootsScreen(),
+                          builder: (_) => PastShootsScreen(onLogout: widget.onLogout,),
                         ),
                       );
                     },
