@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'auth_service.dart';
+import 'past_shoots_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   final Future<void> Function() onLogout;
@@ -143,6 +144,30 @@ class _AdminDashboardState extends State<AdminDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.history),
+                    label: const Text('View Past Shoot Data'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange.shade200,
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PastShootsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
 
             // ── Create user form ──────────────────────────
             const Text('Create User',
