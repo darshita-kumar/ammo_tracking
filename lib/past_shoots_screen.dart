@@ -146,9 +146,6 @@ class _PastShootsScreenState extends State<PastShootsScreen> {
                   border: OutlineInputBorder(),
                 ),
                 items: _shootsByName.keys.map((name) {
-                  final troops = _shootsByName[name]!
-                      .map((s) => s['troop'] as String)
-                      .join(', ');
                   return DropdownMenuItem(
                     value: name,
                     child: Text(name),
