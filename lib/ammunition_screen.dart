@@ -49,13 +49,18 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
     _listenToShootingStatus(); // runs in background
   }
 
+  bool _navigated = false;
+
   Future<void> _listenToShootingStatus() async {
+    if (_navigated || !mounted) return;
+
     try {
       _wsChannel = await ApiService.connectToShoot(widget.shootingId);
       _wsSubscription = _wsChannel!.stream.listen(
         (message) {
           final data = jsonDecode(message as String);
           if (data['status'] == 'ended' && mounted) {
+            _navigated = true;
             _wsSubscription?.cancel();
             _wsChannel?.sink.close();
             Navigator.pushAndRemoveUntil(
@@ -71,15 +76,31 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
             );
           }
         },
-        onError: (e) => debugPrint('WebSocket error: $e'),
+        onError: (e) {
+          debugPrint('WebSocket error: $e — reconnecting...');
+          _reconnect();
+        },
+        onDone: () {
+          debugPrint('WebSocket closed — reconnecting...');
+          _reconnect();
+        },
       );
     } catch (e) {
-      debugPrint('WebSocket connection failed: $e');
+      debugPrint('WebSocket connection failed: $e — reconnecting...');
+      _reconnect();
     }
+  }
+
+  void _reconnect() {
+    if (_navigated || !mounted) return;
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!_navigated && mounted) _listenToShootingStatus();
+    });
   }
 
   @override
   void dispose() {
+    _navigated = true;
     _wsSubscription?.cancel();
     _wsChannel?.sink.close();
     super.dispose();

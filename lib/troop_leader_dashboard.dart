@@ -31,6 +31,7 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   // ── WebSocket for shoot status ──────────────────────────────
   WebSocketChannel? _wsChannel;
   StreamSubscription? _wsSubscription;
+  bool _navigated = false; // prevent double navigation
 
   // ── Polling for ammo events ─────────────────────────────────
   Timer? _pollTimer;
@@ -73,21 +74,40 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
 
   // ── WebSocket ───────────────────────────────────────────────
   Future<void> _connectWebSocket() async {
+    // Don't reconnect if already navigated away
+    if (_navigated || !mounted) return;
+
     try {
       _wsChannel = await ApiService.connectToShoot(widget.shootingId);
       _wsSubscription = _wsChannel!.stream.listen(
         (message) {
           final data = jsonDecode(message as String);
           if (data['status'] == 'ended' && mounted) {
+            _navigated = true;
             _navigateToGoodShooting();
           }
         },
-        onError: (e) => debugPrint('WebSocket error: $e'),
-        onDone: ()  => debugPrint('WebSocket closed'),
+        onError: (e) {
+          debugPrint('WebSocket error: $e — reconnecting...');
+          _reconnect();
+        },
+        onDone: () {
+          debugPrint('WebSocket closed — reconnecting...');
+          _reconnect();
+        },
       );
     } catch (e) {
-      debugPrint('WebSocket connection failed: $e');
+      debugPrint('WebSocket failed: $e — reconnecting...');
+      _reconnect();
     }
+  }
+
+  void _reconnect() {
+    if (_navigated || !mounted) return;
+    // Wait 2 seconds then reconnect
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!_navigated && mounted) _connectWebSocket();
+    });
   }
 
   // ── End shooting ────────────────────────────────────────────
@@ -237,6 +257,7 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
 
   @override
   void dispose() {
+    _navigated = true;
     _wsSubscription?.cancel();
     _wsChannel?.sink.close();
     _pollTimer?.cancel();
