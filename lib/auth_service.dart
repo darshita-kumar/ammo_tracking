@@ -1,99 +1,97 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'api_service.dart';
 
 class AuthService {
-  static final _db = FirebaseFirestore.instance;
   static const _prefKey = 'logged_in_uid';
-
-  static String _hash(String input) =>
-      sha256.convert(utf8.encode(input)).toString();
+  static const _usernameKey = 'logged_in_username';
+  static const _roleKey = 'logged_in_role';
 
   // ── Login ──────────────────────────────────────────────────
   static Future<Map<String, dynamic>?> login(
       String username, String password) async {
-    final query = await _db
-        .collection('users')
-        .where('username', isEqualTo: username.trim())
-        .where('passwordHash', isEqualTo: _hash(password))
-        .limit(1)
-        .get();
+    try {
+      final data = await ApiService.post('/api/login', {
+        'username': username.trim(),
+        'password': password,
+      });
 
-    if (query.docs.isEmpty) return null;
+      // Persist session locally
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefKey, data['uid']);
+      await prefs.setString(_usernameKey, data['username']);
+      await prefs.setString(_roleKey, data['role']);
 
-    final doc = query.docs.first;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefKey, doc.id);
-
-    return {...doc.data(), 'uid': doc.id};
+      return data;
+    } catch (e) {
+      // Invalid credentials returns a 401 from server
+      if (e.toString().contains('Invalid username or password')) {
+        return null;
+      }
+      rethrow;
+    }
   }
 
   // ── Logout ─────────────────────────────────────────────────
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_prefKey);
+    await prefs.remove(_usernameKey);
+    await prefs.remove(_roleKey);
   }
 
   // ── Restore session ────────────────────────────────────────
+  // No server call needed — session is stored locally
   static Future<Map<String, dynamic>?> restoreSession() async {
     final prefs = await SharedPreferences.getInstance();
-    final uid = prefs.getString(_prefKey);
-    if (uid == null) return null;
+    final uid      = prefs.getString(_prefKey);
+    final username = prefs.getString(_usernameKey);
+    final role     = prefs.getString(_roleKey);
 
-    final doc = await _db.collection('users').doc(uid).get();
-    if (!doc.exists) return null;
+    if (uid == null || username == null || role == null) return null;
 
-    return {...doc.data()!, 'uid': uid};
+    return {
+      'uid':      uid,
+      'username': username,
+      'role':     role,
+    };
   }
 
-  // ── Admin helpers (unchanged from before) ─────────────────
+  // ── Admin helpers ──────────────────────────────────────────
+
   static Future<void> createUser({
     required String username,
     required String password,
     required String role,
   }) async {
-    final existing = await _db
-        .collection('users')
-        .where('username', isEqualTo: username.trim())
-        .limit(1)
-        .get();
-
-    if (existing.docs.isNotEmpty) {
-      throw Exception('Username "${username.trim()}" already exists.');
-    }
-
-    await _db.collection('users').add({
-      'username':     username.trim(),
-      'passwordHash': _hash(password),
-      'role':         role,
-      'createdAt':    FieldValue.serverTimestamp(),
+    await ApiService.post('/api/users', {
+      'username': username.trim(),
+      'password': password,
+      'role':     role,
     });
   }
 
-  static Future<void> updatePassword(String uid, String newPassword) async {
-    await _db.collection('users').doc(uid).update({
-      'passwordHash': _hash(newPassword),
+  static Future<void> updatePassword(
+      String uid, String newPassword) async {
+    await ApiService.patch('/api/users/$uid/password', {
+      'new_password': newPassword,
     });
   }
 
-  static Future<void> updateUsername(String uid, String newUsername) async {
-    final existing = await _db
-        .collection('users')
-        .where('username', isEqualTo: newUsername.trim())
-        .limit(1)
-        .get();
-    if (existing.docs.isNotEmpty) {
-      throw Exception('Username already taken.');
-    }
-    await _db.collection('users').doc(uid).update({
-      'username': newUsername.trim(),
+  static Future<void> updateUsername(
+      String uid, String newUsername) async {
+    await ApiService.patch('/api/users/$uid/username', {
+      'new_username': newUsername.trim(),
     });
   }
 
-  static Future<void> deleteUser(String uid) =>
-      _db.collection('users').doc(uid).delete();
+  static Future<void> deleteUser(String uid) async {
+    await ApiService.delete('/api/users/$uid');
+  }
 
-  static Stream<QuerySnapshot> usersStream() =>
-      _db.collection('users').orderBy('createdAt').snapshots();
+  // ── Users list (replaces usersStream) ─────────────────────
+  // Returns a list of all users — call this to refresh the list.
+  static Future<List<Map<String, dynamic>>> getUsers() async {
+    final data = await ApiService.get('/api/users');
+    return List<Map<String, dynamic>>.from(data);
+  }
 }

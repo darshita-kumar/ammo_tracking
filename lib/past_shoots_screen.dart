@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'api_service.dart';
 import 'combined_shoot_summary_screen.dart';
 
 class PastShootsScreen extends StatefulWidget {
@@ -43,41 +43,35 @@ class _PastShootsScreenState extends State<PastShootsScreen> {
 
   Future<void> _fetchShootsForDate(DateTime date) async {
     try {
-      final startOfDay = Timestamp.fromDate(
-        DateTime(date.year, date.month, date.day, 0, 0, 0),
-      );
-      final endOfDay = Timestamp.fromDate(
-        DateTime(date.year, date.month, date.day, 23, 59, 59),
-      );
+      final dateFrom = '${date.year}-'
+          '${date.month.toString().padLeft(2, '0')}-'
+          '${date.day.toString().padLeft(2, '0')}';
+      final dateTo = dateFrom; // same day
 
-      final snapshot = await FirebaseFirestore.instance
-          .collection('shootings')
-          .where('status', isEqualTo: 'ended')
-          .where('createdAt', isGreaterThanOrEqualTo: startOfDay)
-          .where('createdAt', isLessThanOrEqualTo: endOfDay)
-          .orderBy('createdAt', descending: false)
-          .get();
+      final List<dynamic> result = await ApiService.get(
+        '/api/shootings?status=ended&date_from=$dateFrom&date_to=$dateTo',
+      );
 
       // Group by shoot name
       final Map<String, List<Map<String, dynamic>>> grouped = {};
-      for (final doc in snapshot.docs) {
-        final data = {...doc.data(), 'id': doc.id};
+      for (final shoot in result) {
+        final data = shoot as Map<String, dynamic>;
         final name = data['name'] as String? ?? 'Unknown';
         grouped.putIfAbsent(name, () => []).add(data);
       }
 
       setState(() {
         _shootsByName = grouped;
-        _loading = false;
+        _loading      = false;
       });
     } catch (e) {
       setState(() {
-        _error = 'Failed to fetch shoots: $e';
+        _error   = 'Failed to fetch shoots: $e';
         _loading = false;
       });
     }
   }
-
+  
   String _formatDate(DateTime date) {
     return '${date.day.toString().padLeft(2, '0')}/'
            '${date.month.toString().padLeft(2, '0')}/'

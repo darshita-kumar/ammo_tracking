@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'auth_service.dart';
 import 'past_shoots_screen.dart';
 
@@ -15,7 +14,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   String _role    = 'on_field';
-  bool   _creating = false;
+  bool _creating = false;
+
+  List<Map<String, dynamic>> _users = [];
+  bool _loadingUsers = false; 
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    setState(() => _loadingUsers = true);
+    try {
+      final users = await AuthService.getUsers();
+      setState(() => _users = users);
+    } catch (e) {
+      _snack('Failed to load users: $e');
+    } finally {
+      if (mounted) setState(() => _loadingUsers = false);
+    }
+  }
 
   Future<void> _createUser() async {
     if (_userCtrl.text.trim().isEmpty || _passCtrl.text.isEmpty) {
@@ -32,6 +52,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       _userCtrl.clear();
       _passCtrl.clear();
       _snack('User created successfully.');
+      await _loadUsers();
     } catch (e) {
       _snack('$e');
     } finally {
@@ -80,6 +101,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   await AuthService.updatePassword(uid, passCtrl.text);
                 }
                 _snack('User updated.');
+                await _loadUsers();
               } catch (e) {
                 _snack('$e');
               }
@@ -114,6 +136,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     if (confirm == true) {
       await AuthService.deleteUser(uid);
       _snack('"$username" removed.');
+      await _loadUsers();
     }
   }
 
@@ -233,58 +256,50 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: AuthService.usersStream(),
-                builder: (ctx, snap) {
-                  if (!snap.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final docs = snap.data!.docs;
-                  if (docs.isEmpty) {
-                    return const Center(child: Text('No users yet.'));
-                  }
-                  return ListView.separated(
-                    itemCount: docs.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (ctx, i) {
-                      final d   = docs[i].data() as Map<String, dynamic>;
-                      final uid = docs[i].id;
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: d['role'] == 'admin'
-                              ? Colors.orange.shade200
-                              : Colors.blue.shade200,
-                          child: Icon(
-                            d['role'] == 'admin'
-                                ? Icons.admin_panel_settings
-                                : Icons.person,
-                            size: 18,
-                          ),
+              child: _loadingUsers
+                  ? const Center(child: CircularProgressIndicator())
+                  : _users.isEmpty
+                      ? const Center(child: Text('No users yet.'))
+                      : ListView.separated(
+                          itemCount: _users.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (ctx, i) {
+                            final d   = _users[i];
+                            final uid = d['id'] as String;
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: d['role'] == 'admin'
+                                    ? Colors.orange.shade200
+                                    : Colors.blue.shade200,
+                                child: Icon(
+                                  d['role'] == 'admin'
+                                      ? Icons.admin_panel_settings
+                                      : Icons.person,
+                                  size: 18,
+                                ),
+                              ),
+                              title: Text(d['username'] ?? ''),
+                              subtitle: Text(d['role'] ?? ''),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined),
+                                    tooltip: 'Edit',
+                                    onPressed: () => _showEditDialog(uid, d),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline,
+                                        color: Colors.red),
+                                    tooltip: 'Delete',
+                                    onPressed: () => _confirmDelete(
+                                        uid, d['username'] ?? uid),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
-                        title: Text(d['username'] ?? ''),
-                        subtitle: Text(d['role'] ?? ''),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined),
-                              tooltip: 'Edit',
-                              onPressed: () => _showEditDialog(uid, d),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  color: Colors.red),
-                              tooltip: 'Delete',
-                              onPressed: () => _confirmDelete(
-                                  uid, d['username'] ?? uid),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
             ),
           ],
         ),

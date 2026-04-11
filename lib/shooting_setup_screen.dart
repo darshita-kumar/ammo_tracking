@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'api_service.dart';
 import 'troop_leader_dashboard.dart';
 
 class ShootingSetupScreen extends StatefulWidget {
@@ -21,32 +21,8 @@ class _ShootingSetupScreenState extends State<ShootingSetupScreen> {
   bool _loading = false;
   String? _error;
 
-  @override
-  void initState() {
-    super.initState();
-    _endActiveShootsForTroop();
-  }
-
-  Future<void> _endActiveShootsForTroop() async {
-    try {
-      final activeShoots = await FirebaseFirestore.instance
-          .collection('shootings')
-          .where('troop', isEqualTo: widget.troop)
-          .where('status', isEqualTo: 'active')
-          .get();
-
-      if (activeShoots.docs.isNotEmpty) {
-        await Future.wait(
-          activeShoots.docs.map((doc) =>
-            doc.reference.update({'status': 'ended'})
-          ),
-        );
-      }
-    } catch (e) {
-      // Non-critical — if this fails, _startShooting will catch it too
-      debugPrint('Failed to end active shoots: $e');
-    }
-  }
+  // No need for _endActiveShootsForTroop() anymore —
+  // the server handles this automatically in POST /api/shootings
 
   Future<void> _startShooting() async {
     if (_nameCtrl.text.trim().isEmpty) {
@@ -57,13 +33,9 @@ class _ShootingSetupScreenState extends State<ShootingSetupScreen> {
     setState(() { _loading = true; _error = null; });
 
     try {
-      final docRef = await FirebaseFirestore.instance
-          .collection('shootings')
-          .add({
-        'name':      _nameCtrl.text.trim().toUpperCase(),
-        'troop':     widget.troop,
-        'status':    'active',
-        'createdAt': FieldValue.serverTimestamp(),
+      final data = await ApiService.post('/api/shootings', {
+        'name':  _nameCtrl.text.trim(),
+        'troop': widget.troop,
       });
 
       if (!mounted) return;
@@ -74,8 +46,8 @@ class _ShootingSetupScreenState extends State<ShootingSetupScreen> {
           builder: (_) => TroopLeaderDashboard(
             troop:        widget.troop,
             position:     'Troop Leader',
-            shootingId:   docRef.id,
-            shootingName: _nameCtrl.text.trim().toUpperCase(),
+            shootingId:   data['id'],
+            shootingName: data['name'],
             onLogout:     widget.onLogout,
           ),
         ),
@@ -88,6 +60,12 @@ class _ShootingSetupScreenState extends State<ShootingSetupScreen> {
   }
 
   @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -97,9 +75,7 @@ class _ShootingSetupScreenState extends State<ShootingSetupScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
-            onPressed: () async {
-              await widget.onLogout();
-            },
+            onPressed: () async => await widget.onLogout(),
           ),
         ],
       ),

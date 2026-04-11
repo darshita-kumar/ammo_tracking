@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'api_service.dart';
 import 'db_helper.dart';
 import 'constants.dart';
 import 'good_shooting_screen.dart';
@@ -29,7 +31,8 @@ class AmmunitionScreen extends StatefulWidget {
 
 class _AmmunitionScreenState extends State<AmmunitionScreen> {
 
-  StreamSubscription? shootingStatusSubscription;
+  WebSocketChannel? _wsChannel;
+  StreamSubscription? _wsSubscription;
 
   Map<String, int> ammoCounts = {
     Constants.HE_PLUGGED: 0,
@@ -43,38 +46,42 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
   @override
   void initState() {
     super.initState();
-    _listenToShootingStatus();
+    _listenToShootingStatus(); // runs in background
   }
 
-  void _listenToShootingStatus() {
-    shootingStatusSubscription = FirebaseFirestore.instance
-        .collection('shootings')
-        .doc(widget.shootingId)
-        .snapshots()
-        .listen((snap) {
-      if (!snap.exists) return;
-      final status = snap.data()?['status'];
-      if (status == 'ended' && mounted) {
-        shootingStatusSubscription?.cancel();
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                GoodShootingScreen(
-                  onLogout: widget.onLogout,
+  Future<void> _listenToShootingStatus() async {
+    try {
+      _wsChannel = await ApiService.connectToShoot(widget.shootingId);
+      _wsSubscription = _wsChannel!.stream.listen(
+        (message) {
+          final data = jsonDecode(message as String);
+          if (data['status'] == 'ended' && mounted) {
+            _wsSubscription?.cancel();
+            _wsChannel?.sink.close();
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                builder: (_) => GoodShootingScreen(
+                  onLogout:      widget.onLogout,
                   isTroopLeader: false,
-                  shootingId: widget.shootingId,
+                  shootingId:    widget.shootingId,
                 ),
-          ),
-          (route) => false,   // clear entire stack
-        );
-      }
-    });
+              ),
+              (route) => false,
+            );
+          }
+        },
+        onError: (e) => debugPrint('WebSocket error: $e'),
+      );
+    } catch (e) {
+      debugPrint('WebSocket connection failed: $e');
+    }
   }
 
   @override
   void dispose() {
-    shootingStatusSubscription?.cancel();
+    _wsSubscription?.cancel();
+    _wsChannel?.sink.close();
     super.dispose();
   }
 

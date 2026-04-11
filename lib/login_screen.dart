@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
+import 'server_config_screen.dart';
+import 'dart:io';
 
 class LoginScreen extends StatefulWidget {
   final void Function(Map<String, dynamic> userData) onLoginSuccess;
@@ -30,8 +32,20 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         widget.onLoginSuccess(data);
       }
+    } on SocketException {
+      // Server unreachable — likely wrong IP
+      setState(() => _error =
+          'Could not reach server. Please check your server IP in settings.');
     } catch (e) {
-      setState(() => _error = 'Error: $e');
+      final msg = e.toString();
+      if (msg.contains('Invalid username or password')) {
+        setState(() => _error = 'Invalid username or password.');
+      } else if (msg.contains('Connection') || msg.contains('SocketException')) {
+        setState(() => _error =
+            'Could not reach server. Please check your server IP in settings.');
+      } else {
+        setState(() => _error = 'Error: $msg');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -40,6 +54,24 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+        appBar: AppBar(
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Server Settings',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ServerConfigScreen(
+                    onConfigured: () => Navigator.pop(context),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: Center(
         child: SizedBox(
           width: 320,

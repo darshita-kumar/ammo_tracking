@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'api_service.dart';
 import 'package:excel/excel.dart' as xl;
 import 'constants.dart';
 import 'download_util.dart';
@@ -70,7 +70,6 @@ class _CombinedShootSummaryScreenState
   }
 
   Future<void> _fetchSummaryForShoot(String shootingId, String troop) async {
-    // Initialise
     troopData[troop] = {};
     troopEvents[troop] = {};
     for (var g in gunRows) {
@@ -81,18 +80,14 @@ class _CombinedShootSummaryScreenState
       }
     }
 
-    final snapshot = await FirebaseFirestore.instance
-        .collection('shootings')
-        .doc(shootingId)
-        .collection('events')
-        .orderBy('timestamp')
-        .get();
+    final List<dynamic> events = await ApiService.get(
+      '/api/shootings/$shootingId/events',
+    );
 
-    for (var doc in snapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final gun       = data['gun']       as String?;
-      final ammo      = data['ammo']      as String?;
-      final timestamp = data['timestamp'] as Timestamp?;
+    for (final event in events) {
+      final gun       = event['gun']       as String?;
+      final ammo      = event['ammo']      as String?;
+      final timestamp = event['timestamp'] as String?;
 
       if (gun == null || ammo == null) continue;
       if (!troopData[troop]!.containsKey(gun)) continue;
@@ -116,8 +111,8 @@ class _CombinedShootSummaryScreenState
     }
   }
 
-  String _formatTime(Timestamp ts) {
-    final dt = ts.toDate().toLocal();
+  String _formatTime(String ts) {
+    final dt = DateTime.parse(ts).toLocal();
     final h  = dt.hour.toString().padLeft(2, '0');
     final m  = dt.minute.toString().padLeft(2, '0');
     final s  = dt.second.toString().padLeft(2, '0');

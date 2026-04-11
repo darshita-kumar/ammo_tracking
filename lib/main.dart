@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'login_screen.dart';
 import 'select_role_screen.dart';
 import 'admin_dashboard.dart';
 import 'auth_service.dart';
+import 'api_service.dart';
+import 'server_config_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -23,10 +23,18 @@ class _MyAppState extends State<MyApp> {
   bool _checkingSession = true;
   Key _appKey = UniqueKey();
 
+  bool _serverConfigured = false;
+
   @override
   void initState() {
     super.initState();
-    _restoreSession();
+    _checkServerConfig();
+  }
+
+  Future<void> _checkServerConfig() async {
+    final ip = await ApiService.getServerIp();
+    setState(() => _serverConfigured = ip != null && ip.isNotEmpty);
+    if (_serverConfigured) _restoreSession();
   }
 
   Future<void> _restoreSession() async {
@@ -54,6 +62,15 @@ class _MyAppState extends State<MyApp> {
   }
 
   Widget _buildHome() {
+    if (!_serverConfigured) {
+      return ServerConfigScreen(
+        onConfigured: () {
+          setState(() => _serverConfigured = true);
+          _restoreSession();
+        },
+      );
+    }
+
     if (_checkingSession) {
       return const Scaffold(
           body: Center(child: CircularProgressIndicator()));
@@ -63,7 +80,6 @@ class _MyAppState extends State<MyApp> {
       return LoginScreen(onLoginSuccess: _onLoginSuccess);
     }
 
-    // Admin goes to admin dashboard, everyone else to role selection
     if (_userData!['role'] == 'admin') {
       return AdminDashboard(onLogout: _onLogout);
     }

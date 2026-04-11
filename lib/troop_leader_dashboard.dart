@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'api_service.dart';
 import 'constants.dart';
 import 'good_shooting_screen.dart';
 
@@ -10,7 +12,7 @@ class TroopLeaderDashboard extends StatefulWidget {
   final String troop;
   final String shootingId;
   final String shootingName;
-   final Future<void> Function() onLogout;
+  final Future<void> Function() onLogout;
 
   const TroopLeaderDashboard({
     super.key,
@@ -26,9 +28,13 @@ class TroopLeaderDashboard extends StatefulWidget {
 }
 
 class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
-  Timestamp? sessionStart;
-  StreamSubscription? eventSubscription;
-  StreamSubscription? shootingStatusSubscription;  // ← new
+  // ── WebSocket for shoot status ──────────────────────────────
+  WebSocketChannel? _wsChannel;
+  StreamSubscription? _wsSubscription;
+
+  // ── Polling for ammo events ─────────────────────────────────
+  Timer? _pollTimer;
+  final Set<String> _processedEventIds = {};
 
   final ammoTypes = [
     Constants.HE_PLUGGED,
@@ -42,18 +48,18 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
 
   final gunRows = [Constants.GUN1, Constants.GUN2, Constants.GUN3];
 
-  Map<String, int> initial = {};
+  Map<String, int> initial   = {};
   Map<String, int> threshold = {};
   Map<String, Map<String, int>> guns = {};
   Set<String> flashingCells = {};
-  bool started = false;
-  bool _ending = false;          // ← loading state for end button
+  bool started  = false;
+  bool _ending  = false;
 
   @override
   void initState() {
     super.initState();
     for (var a in ammoTypes) {
-      initial[a] = 0;
+      initial[a]   = 0;
       threshold[a] = 0;
     }
     for (var g in gunRows) {
@@ -62,25 +68,29 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
         guns[g]![a] = 0;
       }
     }
-    _listenToShootingStatus();   // ← start listening immediately
+    _connectWebSocket();
   }
 
-  // ── Listen for shooting status changes ─────────────────────
-  void _listenToShootingStatus() {
-    shootingStatusSubscription = FirebaseFirestore.instance
-        .collection('shootings')
-        .doc(widget.shootingId)
-        .snapshots()
-        .listen((snap) {
-      if (!snap.exists) return;
-      final status = snap.data()?['status'];
-      if (status == 'ended' && mounted) {
-        _navigateToGoodShooting();
-      }
-    });
+  // ── WebSocket ───────────────────────────────────────────────
+  Future<void> _connectWebSocket() async {
+    try {
+      _wsChannel = await ApiService.connectToShoot(widget.shootingId);
+      _wsSubscription = _wsChannel!.stream.listen(
+        (message) {
+          final data = jsonDecode(message as String);
+          if (data['status'] == 'ended' && mounted) {
+            _navigateToGoodShooting();
+          }
+        },
+        onError: (e) => debugPrint('WebSocket error: $e'),
+        onDone: ()  => debugPrint('WebSocket closed'),
+      );
+    } catch (e) {
+      debugPrint('WebSocket connection failed: $e');
+    }
   }
 
-  // ── End shooting ───────────────────────────────────────────
+  // ── End shooting ────────────────────────────────────────────
   Future<void> _endShooting() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -108,12 +118,11 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
 
     setState(() => _ending = true);
     try {
-      await FirebaseFirestore.instance
-          .collection('shootings')
-          .doc(widget.shootingId)
-          .update({'status': 'ended'});
-      // _listenToShootingStatus will pick up the change
-      // and navigate automatically
+      await ApiService.patch(
+        '/api/shootings/${widget.shootingId}/status',
+        {'status': 'ended'},
+      );
+      // WebSocket broadcast from server will trigger _navigateToGoodShooting
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -125,35 +134,97 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   }
 
   void _navigateToGoodShooting() {
-    // Cancel subscriptions before navigating
-    eventSubscription?.cancel();
-    shootingStatusSubscription?.cancel();
+    _wsSubscription?.cancel();
+    _wsChannel?.sink.close();
+    _pollTimer?.cancel();
 
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
         builder: (_) => GoodShootingScreen(
-          onLogout: widget.onLogout, 
-          isTroopLeader: true, 
-          shootingId: widget.shootingId,),
+          onLogout:     widget.onLogout,
+          isTroopLeader: true,
+          shootingId:   widget.shootingId,
+        ),
       ),
-      (route) => false,   // clear the entire stack
+      (route) => false,
     );
   }
 
+  // ── Start shooting + event polling ──────────────────────────
   void startPressed() {
     setState(() {
       started = true;
-      sessionStart = Timestamp.now();
+      _processedEventIds.clear();
       for (var ammo in ammoTypes) {
         for (var gun in gunRows) {
           guns[gun]![ammo] = initial[ammo]!;
         }
       }
     });
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) startListeningToEvents();
+
+    // Mark all existing events as already seen before polling starts
+    Future.delayed(const Duration(milliseconds: 500), () async {
+      if (!mounted) return;
+      try {
+        final List<dynamic> existing = await ApiService.get(
+          '/api/shootings/${widget.shootingId}/events',
+        );
+        for (final e in existing) {
+          _processedEventIds.add(e['id'] as String);
+        }
+      } catch (_) {}
+      if (mounted) _startPolling();
     });
+  }
+
+  void _startPolling() {
+    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _fetchNewEvents();
+    });
+  }
+
+  Future<void> _fetchNewEvents() async {
+    try {
+      final List<dynamic> events = await ApiService.get(
+        '/api/shootings/${widget.shootingId}/events',
+      );
+
+      if (!mounted) return;
+
+      for (final event in events) {
+        final id = event['id'] as String;
+
+        // Skip already processed events — no timestamp filtering needed
+        if (_processedEventIds.contains(id)) continue;
+
+        _processedEventIds.add(id);
+        _applyEvent(event['gun'] as String, event['ammo'] as String);
+      }
+    } catch (e) {
+      debugPrint('Polling error: $e');
+    }
+  }
+
+  void _applyEvent(String gun, String ammo) {
+    if (!guns.containsKey(gun)) return;
+    if (!guns[gun]!.containsKey(ammo)) return;
+
+    setState(() {
+      if (guns[gun]![ammo]! > 0) {
+        guns[gun]![ammo] = guns[gun]![ammo]! - 1;
+      }
+      if (ammo != Constants.SUPERCART) {
+        if (guns[gun]![Constants.CART]! > 0) {
+          guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! - 1;
+        }
+      } else {
+        guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! + 1;
+      }
+    });
+
+    flashCell(gun, ammo);
+    flashCell(gun, Constants.CART);
   }
 
   void flashCell(String gun, String ammo) {
@@ -164,56 +235,17 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
     });
   }
 
-  void startListeningToEvents() {
-    bool initialLoadDone = false;
-
-    eventSubscription = FirebaseFirestore.instance
-        .collection('shootings')
-        .doc(widget.shootingId)
-        .collection('events')
-        .where('timestamp', isGreaterThan: sessionStart)
-        .snapshots()
-        .listen((snapshot) {
-          if (!initialLoadDone) {
-            initialLoadDone = true;
-            return;
-          }
-          for (var change in snapshot.docChanges) {
-            if (change.type == DocumentChangeType.added) {
-              final data = change.doc.data()!;
-              String gun  = data['gun'];
-              String ammo = data['ammo'];
-
-              setState(() {
-                if (guns[gun]![ammo]! > 0) {
-                  guns[gun]![ammo] = guns[gun]![ammo]! - 1;
-                }
-                if (ammo != Constants.SUPERCART) {
-                  if (guns[gun]![Constants.CART]! > 0) {
-                    guns[gun]![Constants.CART] =
-                        guns[gun]![Constants.CART]! - 1;
-                  }
-                } else {
-                  guns[gun]![Constants.CART] =
-                      guns[gun]![Constants.CART]! + 1;
-                }
-              });
-
-              flashCell(gun, ammo);
-              flashCell(gun, Constants.CART);
-            }
-          }
-        });
-  }
-
   @override
   void dispose() {
-    eventSubscription?.cancel();
-    shootingStatusSubscription?.cancel();
+    _wsSubscription?.cancel();
+    _wsChannel?.sink.close();
+    _pollTimer?.cancel();
     super.dispose();
   }
 
-  //====================== FRONTEND ==============================
+  // ══════════════════════════════════════════════════════════
+  // FRONTEND (unchanged from original)
+  // ══════════════════════════════════════════════════════════
 
   Widget cell(String text,
       {bool bold = false, double width = 110, Color? color}) {
@@ -236,7 +268,7 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   }
 
   Widget editableCell(String gun, String ammo) {
-    int value = guns[gun]![ammo]!;
+    int value      = guns[gun]![ammo]!;
     final isFlashing = flashingCells.contains('$gun|$ammo');
 
     Color? highlight;
@@ -306,16 +338,13 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
-            onPressed: () async {
-              await widget.onLogout();
-            },
+            onPressed: () async => await widget.onLogout(),
           ),
         ],
       ),
       body: SafeArea(
         child: Column(
           children: [
-
             Expanded(
               child: Center(
                 child: SingleChildScrollView(
@@ -336,23 +365,20 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
                           Row(
                             children: [
                               cell("Initial", bold: true, width: 150),
-                              ...ammoTypes.map(
-                                  (a) => inputCell(a, initial)),
+                              ...ammoTypes.map((a) => inputCell(a, initial)),
                             ],
                           ),
                           Row(
                             children: [
                               cell("Threshold", bold: true, width: 150),
-                              ...ammoTypes.map(
-                                  (a) => inputCell(a, threshold)),
+                              ...ammoTypes.map((a) => inputCell(a, threshold)),
                             ],
                           ),
                           ...gunRows.map(
                             (g) => Row(
                               children: [
                                 cell(g, bold: true, width: 150),
-                                ...ammoTypes
-                                    .map((a) => editableCell(g, a)),
+                                ...ammoTypes.map((a) => editableCell(g, a)),
                               ],
                             ),
                           ),
@@ -370,7 +396,6 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-
                 SizedBox(
                   width: 180,
                   height: 60,
@@ -387,14 +412,13 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
                             fontSize: 22, color: Colors.black)),
                   ),
                 ),
-
                 const SizedBox(width: 20),
-
                 SizedBox(
                   width: 180,
                   height: 60,
                   child: ElevatedButton(
-                    onPressed: (!started || _ending) ? null : _endShooting,
+                    onPressed:
+                        (!started || _ending) ? null : _endShooting,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: (!started || _ending)
                           ? Colors.grey
@@ -404,7 +428,8 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
                     ),
                     child: _ending
                         ? const SizedBox(
-                            width: 20, height: 20,
+                            width: 20,
+                            height: 20,
                             child: CircularProgressIndicator(
                                 strokeWidth: 2))
                         : const Text('END SHOOTING',
@@ -412,7 +437,6 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
                                 fontSize: 16, color: Colors.black)),
                   ),
                 ),
-
               ],
             ),
 

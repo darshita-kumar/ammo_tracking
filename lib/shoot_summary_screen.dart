@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'api_service.dart';
 import 'constants.dart';
 import 'download_util.dart';
 import 'package:excel/excel.dart' as xl;
@@ -48,7 +48,7 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
   Future<void> _fetchSummary() async {
     for (var g in gunRows) {
       guns[g] = {};
-      gunEvents[g] = []; // add this
+      gunEvents[g] = [];
       for (var a in ammoTypes) {
         guns[g]![a] = 0;
       }
@@ -56,30 +56,19 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
 
     try {
       final results = await Future.wait([
-      FirebaseFirestore.instance
-          .collection('shootings')
-          .doc(widget.shootingId)
-          .get(),
-      FirebaseFirestore.instance
-          .collection('shootings')
-          .doc(widget.shootingId)
-          .collection('events')
-          .orderBy('timestamp')
-          .get(),
+        ApiService.get('/api/shootings/${widget.shootingId}'),
+        ApiService.get('/api/shootings/${widget.shootingId}/events'),
       ]);
 
-    final shootingDoc = results[0] as DocumentSnapshot;
-    final snapshot = results[1] as QuerySnapshot;
+      final shootingDoc = results[0] as Map<String, dynamic>;
+      final events      = results[1] as List<dynamic>;
 
-    // Extract shoot name
-    _shootingName = (shootingDoc.data() 
-        as Map<String, dynamic>?)?['name'] ?? 'Unknown Shoot';
+      _shootingName = shootingDoc['name'] ?? 'Unknown Shoot';
 
-      for (var doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final gun       = data['gun']       as String?;
-        final ammo      = data['ammo']      as String?;
-        final timestamp = data['timestamp'] as Timestamp?;
+      for (final event in events) {
+        final gun       = event['gun']       as String?;
+        final ammo      = event['ammo']      as String?;
+        final timestamp = event['timestamp'] as String?;
 
         if (gun == null || ammo == null) continue;
         if (!guns.containsKey(gun)) continue;
@@ -93,7 +82,6 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
           guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! - 1;
         }
 
-        // Store event for timings section
         if (timestamp != null) {
           gunEvents[gun]!.add({'ammo': ammo, 'timestamp': timestamp});
         }
@@ -191,8 +179,8 @@ class _ShootSummaryScreenState extends State<ShootSummaryScreen> {
     );
   }
   
-  String _formatTime(Timestamp ts) {
-    final dt = ts.toDate().toLocal();
+  String _formatTime(String ts) {
+    final dt = DateTime.parse(ts).toLocal();
     final h  = dt.hour.toString().padLeft(2, '0');
     final m  = dt.minute.toString().padLeft(2, '0');
     final s  = dt.second.toString().padLeft(2, '0');

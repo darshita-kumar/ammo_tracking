@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'api_service.dart';
 import 'ammunition_screen.dart';
 import 'constants.dart';
 
@@ -24,18 +24,16 @@ class _GunSelectionScreenState extends State<GunSelectionScreen> {
 
   // Fetches the active shooting for this troop
   Future<Map<String, dynamic>?> _fetchActiveShooting() async {
-    final query = await FirebaseFirestore.instance
-        .collection('shootings')
-        .where('troop', isEqualTo: widget.troop)
-        .where('status', isEqualTo: 'active')
-        .limit(1)
-        .get();
+    final List<dynamic> result = await ApiService.get(
+      '/api/shootings?troop=${widget.troop}&status=active',
+    );
 
-    if (query.docs.isEmpty) return null;
+    if (result.isEmpty) return null;
 
+    final shoot = result.first as Map<String, dynamic>;
     return {
-      'shootingId':   query.docs.first.id,
-      'shootingName': query.docs.first.data()['name'] ?? '',
+      'shootingId':   shoot['id'],
+      'shootingName': shoot['name'] ?? '',
     };
   }
 

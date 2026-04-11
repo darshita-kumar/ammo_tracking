@@ -1,17 +1,12 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'api_service.dart';
 
 Future<void> sendAmmoEvent({
   required String shootingId,
   required String gun,
   required String ammo,
 }) async {
-  await FirebaseFirestore.instance
-      .collection('shootings')
-      .doc(shootingId)
-      .collection('events')
-      .add({
-    'gun':       gun,
-    'ammo':      ammo,
-    'timestamp': FieldValue.serverTimestamp(),
+  await ApiService.post('/api/shootings/$shootingId/events', {
+    'gun':  gun,
+    'ammo': ammo,
   });
 }
