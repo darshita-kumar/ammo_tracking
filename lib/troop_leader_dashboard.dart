@@ -32,6 +32,7 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   WebSocketChannel? _wsChannel;
   StreamSubscription? _wsSubscription;
   bool _navigated = false; // prevent double navigation
+  bool _polling = false;
 
   // ── Polling for ammo events ─────────────────────────────────
   Timer? _pollTimer;
@@ -143,7 +144,15 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
         {'status': 'ended'},
       );
       // WebSocket broadcast from server will trigger _navigateToGoodShooting
-    } catch (e) {
+    } on TimeoutException {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+          'Request timed out. Check server connection and try again.'
+        )),
+      );
+    }
+  } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error ending session: $e')));
@@ -204,7 +213,10 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
     });
   }
 
+  // In _fetchNewEvents(), batch all events then setState once:
   Future<void> _fetchNewEvents() async {
+    if (_polling) return;
+    _polling = true;
     try {
       final List<dynamic> events = await ApiService.get(
         '/api/shootings/${widget.shootingId}/events',
@@ -212,39 +224,53 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
 
       if (!mounted) return;
 
+      // Collect all new events first
+      final newEvents = <Map<String, dynamic>>[];
       for (final event in events) {
         final id = event['id'] as String;
-
-        // Skip already processed events — no timestamp filtering needed
         if (_processedEventIds.contains(id)) continue;
-
         _processedEventIds.add(id);
-        _applyEvent(event['gun'] as String, event['ammo'] as String);
+        newEvents.add(event);
+      }
+
+      // Apply all at once in a single setState
+      if (newEvents.isNotEmpty) {
+        setState(() {
+          for (final event in newEvents) {
+            _applyEventNoSetState(
+              event['gun']  as String,
+              event['ammo'] as String,
+            );
+          }
+        });
+        // Flash cells after setState
+        for (final event in newEvents) {
+          flashCell(event['gun'] as String, event['ammo'] as String);
+          flashCell(event['gun'] as String, Constants.CART);
+        }
       }
     } catch (e) {
       debugPrint('Polling error: $e');
+    } finally {
+      _polling = false;
     }
   }
 
-  void _applyEvent(String gun, String ammo) {
+  // New method — applies event logic without calling setState:
+  void _applyEventNoSetState(String gun, String ammo) {
     if (!guns.containsKey(gun)) return;
     if (!guns[gun]!.containsKey(ammo)) return;
 
-    setState(() {
-      if (guns[gun]![ammo]! > 0) {
-        guns[gun]![ammo] = guns[gun]![ammo]! - 1;
+    if (guns[gun]![ammo]! > 0) {
+      guns[gun]![ammo] = guns[gun]![ammo]! - 1;
+    }
+    if (ammo != Constants.SUPERCART) {
+      if (guns[gun]![Constants.CART]! > 0) {
+        guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! - 1;
       }
-      if (ammo != Constants.SUPERCART) {
-        if (guns[gun]![Constants.CART]! > 0) {
-          guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! - 1;
-        }
-      } else {
-        guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! + 1;
-      }
-    });
-
-    flashCell(gun, ammo);
-    flashCell(gun, Constants.CART);
+    } else {
+      guns[gun]![Constants.CART] = guns[gun]![Constants.CART]! + 1;
+    }
   }
 
   void flashCell(String gun, String ammo) {
@@ -265,7 +291,7 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   }
 
   // ══════════════════════════════════════════════════════════
-  // FRONTEND (unchanged from original)
+  // FRONTEND
   // ══════════════════════════════════════════════════════════
 
   Widget cell(String text,
