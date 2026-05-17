@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'api_service.dart';
 import 'constants.dart';
 import 'good_shooting_screen.dart';
@@ -28,15 +26,6 @@ class TroopLeaderDashboard extends StatefulWidget {
 }
 
 class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
-  // ── WebSocket for shoot status ──────────────────────────────
-  WebSocketChannel? _wsChannel;
-  StreamSubscription? _wsSubscription;
-  bool _navigated = false; // prevent double navigation
-  bool _polling = false;
-
-  // ── Polling for ammo events ─────────────────────────────────
-  Timer? _pollTimer;
-  final Set<String> _processedEventIds = {};
 
   final ammoTypes = [
     Constants.HE_PLUGGED,
@@ -53,9 +42,12 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   Map<String, int> initial   = {};
   Map<String, int> threshold = {};
   Map<String, Map<String, int>> guns = {};
-  Set<String> flashingCells = {};
-  bool started  = false;
-  bool _ending  = false;
+  Set<String> flashingCells      = {};
+  Set<String> _processedEventIds = {};
+  String _lastEventId            = 'none';
+
+  bool started = false;
+  bool _ending = false;
 
   @override
   void initState() {
@@ -70,45 +62,74 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
         guns[g]![a] = 0;
       }
     }
-    _connectWebSocket();
+    _watchStatus();
   }
 
-  // ── WebSocket ───────────────────────────────────────────────
-  Future<void> _connectWebSocket() async {
-    // Don't reconnect if already navigated away
-    if (_navigated || !mounted) return;
+  // ── Status watcher ──────────────────────────────────────────
+  // Runs continuously — server holds connection until status changes
+  Future<void> _watchStatus() async {
+    while (mounted) {
+      try {
+        final data = await ApiService.get(
+          '/api/shootings/${widget.shootingId}/status/watch',
+        ) as Map<String, dynamic>;
 
-    try {
-      _wsChannel = await ApiService.connectToShoot(widget.shootingId);
-      _wsSubscription = _wsChannel!.stream.listen(
-        (message) {
-          final data = jsonDecode(message as String);
-          if (data['status'] == 'ended' && mounted) {
-            _navigated = true;
-            _navigateToGoodShooting();
-          }
-        },
-        onError: (e) {
-          debugPrint('WebSocket error: $e — reconnecting...');
-          _reconnect();
-        },
-        onDone: () {
-          debugPrint('WebSocket closed — reconnecting...');
-          _reconnect();
-        },
-      );
-    } catch (e) {
-      debugPrint('WebSocket failed: $e — reconnecting...');
-      _reconnect();
+        if (!mounted) return;
+
+        if (data['status'] == 'ended') {
+          _navigateToGoodShooting();
+          return;
+        }
+        // Status unchanged — loop immediately
+      } catch (e) {
+        debugPrint('Status watch error: $e');
+        if (mounted) await Future.delayed(const Duration(seconds: 1));
+      }
     }
   }
 
-  void _reconnect() {
-    if (_navigated || !mounted) return;
-    // Wait 2 seconds then reconnect
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!_navigated && mounted) _connectWebSocket();
-    });
+  // ── Event watcher ───────────────────────────────────────────
+  // Starts on START press — server holds connection until new events arrive
+  Future<void> _watchEvents() async {
+    while (mounted && started) {
+      try {
+        final List<dynamic> events = await ApiService.get(
+          '/api/shootings/${widget.shootingId}/events/since/$_lastEventId',
+        );
+
+        if (!mounted || !started) return;
+
+        final newEvents = <Map<String, dynamic>>[];
+        for (final event in events) {
+          final id = event['id'] as String;
+          if (_processedEventIds.contains(id)) continue;
+          _processedEventIds.add(id);
+          newEvents.add(event);
+          _lastEventId = id;
+        }
+
+        if (newEvents.isNotEmpty && mounted) {
+          setState(() {
+            for (final event in newEvents) {
+              _applyEventNoSetState(
+                event['gun']  as String,
+                event['ammo'] as String,
+              );
+            }
+          });
+          for (final event in newEvents) {
+            flashCell(event['gun'] as String, event['ammo'] as String);
+            flashCell(event['gun'] as String, Constants.CART);
+          }
+        }
+        // Loop immediately — server already waited for events
+      } catch (e) {
+        debugPrint('Event watch error: $e');
+        if (mounted && started) {
+          await Future.delayed(const Duration(seconds: 1));
+        }
+      }
+    }
   }
 
   // ── End shooting ────────────────────────────────────────────
@@ -143,16 +164,17 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
         '/api/shootings/${widget.shootingId}/status',
         {'status': 'ended'},
       );
-      // WebSocket broadcast from server will trigger _navigateToGoodShooting
+      // Navigate directly — don't wait for status watcher
+      if (mounted) _navigateToGoodShooting();
     } on TimeoutException {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(
-          'Request timed out. Check server connection and try again.'
-        )),
-      );
-    }
-  } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(
+            'Request timed out. Check server connection.'
+          )),
+        );
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error ending session: $e')));
@@ -163,100 +185,36 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   }
 
   void _navigateToGoodShooting() {
-    _wsSubscription?.cancel();
-    _wsChannel?.sink.close();
-    _pollTimer?.cancel();
-
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
         builder: (_) => GoodShootingScreen(
-          onLogout:     widget.onLogout,
+          onLogout:      widget.onLogout,
           isTroopLeader: true,
-          shootingId:   widget.shootingId,
+          shootingId:    widget.shootingId,
         ),
       ),
       (route) => false,
     );
   }
 
-  // ── Start shooting + event polling ──────────────────────────
+  // ── Start shooting ──────────────────────────────────────────
   void startPressed() {
     setState(() {
-      started = true;
-      _processedEventIds.clear();
+      started              = true;
+      _lastEventId         = 'none';
+      _processedEventIds   = {};
       for (var ammo in ammoTypes) {
         for (var gun in gunRows) {
           guns[gun]![ammo] = initial[ammo]!;
         }
       }
     });
-
-    // Mark all existing events as already seen before polling starts
-    Future.delayed(const Duration(milliseconds: 500), () async {
-      if (!mounted) return;
-      try {
-        final List<dynamic> existing = await ApiService.get(
-          '/api/shootings/${widget.shootingId}/events',
-        );
-        for (final e in existing) {
-          _processedEventIds.add(e['id'] as String);
-        }
-      } catch (_) {}
-      if (mounted) _startPolling();
-    });
+    _watchEvents();
   }
 
-  void _startPolling() {
-    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _fetchNewEvents();
-    });
-  }
-
-  // In _fetchNewEvents(), batch all events then setState once:
-  Future<void> _fetchNewEvents() async {
-    if (_polling) return;
-    _polling = true;
-    try {
-      final List<dynamic> events = await ApiService.get(
-        '/api/shootings/${widget.shootingId}/events',
-      );
-
-      if (!mounted) return;
-
-      // Collect all new events first
-      final newEvents = <Map<String, dynamic>>[];
-      for (final event in events) {
-        final id = event['id'] as String;
-        if (_processedEventIds.contains(id)) continue;
-        _processedEventIds.add(id);
-        newEvents.add(event);
-      }
-
-      // Apply all at once in a single setState
-      if (newEvents.isNotEmpty) {
-        setState(() {
-          for (final event in newEvents) {
-            _applyEventNoSetState(
-              event['gun']  as String,
-              event['ammo'] as String,
-            );
-          }
-        });
-        // Flash cells after setState
-        for (final event in newEvents) {
-          flashCell(event['gun'] as String, event['ammo'] as String);
-          flashCell(event['gun'] as String, Constants.CART);
-        }
-      }
-    } catch (e) {
-      debugPrint('Polling error: $e');
-    } finally {
-      _polling = false;
-    }
-  }
-
-  // New method — applies event logic without calling setState:
+  // ── Apply event without setState ────────────────────────────
   void _applyEventNoSetState(String gun, String ammo) {
     if (!guns.containsKey(gun)) return;
     if (!guns[gun]!.containsKey(ammo)) return;
@@ -274,6 +232,7 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   }
 
   void flashCell(String gun, String ammo) {
+    if (!mounted) return;
     final key = '$gun|$ammo';
     setState(() => flashingCells.add(key));
     Future.delayed(const Duration(milliseconds: 600), () {
@@ -283,10 +242,7 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
 
   @override
   void dispose() {
-    _navigated = true;
-    _wsSubscription?.cancel();
-    _wsChannel?.sink.close();
-    _pollTimer?.cancel();
+    started = false; // stops _watchEvents loop
     super.dispose();
   }
 
@@ -315,7 +271,7 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
   }
 
   Widget editableCell(String gun, String ammo) {
-    int value      = guns[gun]![ammo]!;
+    int value        = guns[gun]![ammo]!;
     final isFlashing = flashingCells.contains('$gun|$ammo');
 
     Color? highlight;
@@ -412,20 +368,23 @@ class _TroopLeaderDashboardState extends State<TroopLeaderDashboard> {
                           Row(
                             children: [
                               cell("Initial", bold: true, width: 150),
-                              ...ammoTypes.map((a) => inputCell(a, initial)),
+                              ...ammoTypes.map(
+                                  (a) => inputCell(a, initial)),
                             ],
                           ),
                           Row(
                             children: [
                               cell("Threshold", bold: true, width: 150),
-                              ...ammoTypes.map((a) => inputCell(a, threshold)),
+                              ...ammoTypes.map(
+                                  (a) => inputCell(a, threshold)),
                             ],
                           ),
                           ...gunRows.map(
                             (g) => Row(
                               children: [
                                 cell(g, bold: true, width: 150),
-                                ...ammoTypes.map((a) => editableCell(g, a)),
+                                ...ammoTypes
+                                    .map((a) => editableCell(g, a)),
                               ],
                             ),
                           ),

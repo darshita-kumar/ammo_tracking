@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'api_service.dart';
 import 'db_helper.dart';
 import 'constants.dart';
@@ -31,8 +29,7 @@ class AmmunitionScreen extends StatefulWidget {
 
 class _AmmunitionScreenState extends State<AmmunitionScreen> {
 
-  WebSocketChannel? _wsChannel;
-  StreamSubscription? _wsSubscription;
+  bool _navigated = false;
 
   Map<String, int> ammoCounts = {
     Constants.HE_PLUGGED: 0,
@@ -46,63 +43,48 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
   @override
   void initState() {
     super.initState();
-    _listenToShootingStatus(); // runs in background
+    _watchStatus();
   }
 
-  bool _navigated = false;
+  // ── Status watcher ──────────────────────────────────────────
+  // Runs continuously — server holds connection until status changes
+  Future<void> _watchStatus() async {
+    while (mounted && !_navigated) {
+      try {
+        final data = await ApiService.get(
+          '/api/shootings/${widget.shootingId}/status/watch',
+        ) as Map<String, dynamic>;
 
-  Future<void> _listenToShootingStatus() async {
-    if (_navigated || !mounted) return;
+        if (!mounted || _navigated) return;
 
-    try {
-      _wsChannel = await ApiService.connectToShoot(widget.shootingId);
-      _wsSubscription = _wsChannel!.stream.listen(
-        (message) {
-          final data = jsonDecode(message as String);
-          if (data['status'] == 'ended' && mounted) {
-            _navigated = true;
-            _wsSubscription?.cancel();
-            _wsChannel?.sink.close();
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder: (_) => GoodShootingScreen(
-                  onLogout:      widget.onLogout,
-                  isTroopLeader: false,
-                  shootingId:    widget.shootingId,
-                ),
+        if (data['status'] == 'ended') {
+          _navigated = true;
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (_) => GoodShootingScreen(
+                onLogout:      widget.onLogout,
+                isTroopLeader: false,
+                shootingId:    widget.shootingId,
               ),
-              (route) => false,
-            );
-          }
-        },
-        onError: (e) {
-          debugPrint('WebSocket error: $e — reconnecting...');
-          _reconnect();
-        },
-        onDone: () {
-          debugPrint('WebSocket closed — reconnecting...');
-          _reconnect();
-        },
-      );
-    } catch (e) {
-      debugPrint('WebSocket connection failed: $e — reconnecting...');
-      _reconnect();
+            ),
+            (route) => false,
+          );
+          return;
+        }
+        // Status unchanged — loop immediately
+      } catch (e) {
+        debugPrint('Status watch error: $e');
+        if (mounted && !_navigated) {
+          await Future.delayed(const Duration(seconds: 1));
+        }
+      }
     }
-  }
-
-  void _reconnect() {
-    if (_navigated || !mounted) return;
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!_navigated && mounted) _listenToShootingStatus();
-    });
   }
 
   @override
   void dispose() {
-    _navigated = true;
-    _wsSubscription?.cancel();
-    _wsChannel?.sink.close();
+    _navigated = true; // stops _watchStatus loop
     super.dispose();
   }
 
@@ -169,9 +151,7 @@ class _AmmunitionScreenState extends State<AmmunitionScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
-            onPressed: () async {
-              await widget.onLogout();
-            },
+            onPressed: () async => await widget.onLogout(),
           ),
         ],
       ),

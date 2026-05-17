@@ -5,7 +5,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 class ApiService {
   static const _prefKey = 'server_ip';
-  static const _defaultPort = '8000';
+  static const _defaultPort = '8080';
   static final http.Client _client = http.Client();
 
   // ── Server IP ───────────────────────────────────────────────
